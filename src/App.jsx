@@ -460,7 +460,7 @@ function ScannerModal({ productos, onClose, onDetect }) {
         try {
           await new Promise((resolve, reject) => {
             const script = document.createElement("script");
-            script.src = "https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js";
+            script.src = "https://unpkg.com/@zxing/library@latest";
             script.onload = resolve;
             script.onerror = reject;
             document.head.appendChild(script);
@@ -476,7 +476,7 @@ function ScannerModal({ productos, onClose, onDetect }) {
       try {
         const hints = new Map();
         // Formatos EAN-13, EAN-8, Code128, Code39
-        const { BarcodeFormat, BrowserMultiFormatReader } = window.ZXingBrowser;
+        const { BarcodeFormat, BrowserMultiFormatReader } = window.ZXing;
         hints.set(2, [
           BarcodeFormat.EAN_13,
           BarcodeFormat.EAN_8,
