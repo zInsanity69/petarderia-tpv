@@ -3,10 +3,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders })
 
   try {
     // Cliente con anon key para verificar que quien llama es ADMIN
@@ -18,7 +19,7 @@ Deno.serve(async (req) => {
 
     // Verificar que el usuario que llama es ADMIN
     const { data: { user } } = await supabaseAnon.auth.getUser()
-    if (!user) return new Response(JSON.stringify({ error: 'No autenticado' }), { status: 401, headers: corsHeaders })
+    if (!user) return new Response(JSON.stringify({ error: 'No autenticado' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
     const { data: perfil } = await supabaseAnon
       .from('perfiles')
@@ -27,7 +28,7 @@ Deno.serve(async (req) => {
       .single()
 
     if (perfil?.rol !== 'ADMIN') {
-      return new Response(JSON.stringify({ error: 'Solo los administradores pueden crear usuarios' }), { status: 403, headers: corsHeaders })
+      return new Response(JSON.stringify({ error: 'Solo los administradores pueden crear usuarios' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // Cliente con service_role para crear el usuario en Auth
@@ -39,10 +40,10 @@ Deno.serve(async (req) => {
     const { nombre, email, password, rol, caseta_id } = await req.json()
 
     if (!nombre || !email || !password || !rol) {
-      return new Response(JSON.stringify({ error: 'Faltan campos obligatorios' }), { status: 400, headers: corsHeaders })
+      return new Response(JSON.stringify({ error: 'Faltan campos obligatorios' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
     if (rol === 'EMPLEADO' && !caseta_id) {
-      return new Response(JSON.stringify({ error: 'El empleado necesita una caseta asignada' }), { status: 400, headers: corsHeaders })
+      return new Response(JSON.stringify({ error: 'El empleado necesita una caseta asignada' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
     // 1. Crear usuario en Auth

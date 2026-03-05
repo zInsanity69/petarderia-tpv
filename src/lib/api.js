@@ -139,6 +139,7 @@ export async function crearUsuario({ nombre, email, password, rol, caseta_id }) 
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({ nombre, email, password, rol, caseta_id }),
     }
