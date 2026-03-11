@@ -1,16 +1,16 @@
-// Calcula el precio total de una línea aplicando packs exactos.
-// Las ofertas se aplican de mayor a menor pack (greedy).
-// El resto que no completa ningún pack va a precio normal.
+// ─── LÓGICA DE PRECIOS Y OFERTAS ─────────────────────────────
 //
-// Ejemplo: oferta 4x5€ y 10x10€. Cliente lleva 22 unidades.
-//   → 2 packs de 10 = 20u a 10€/pack = 20€
-//   → 2 restantes a precio normal (1€/u) = 2€
-//   → Total: 22€  (en vez de 44€ a precio normal)
+// Tipos de oferta:
+//   'pack'      → N unidades del mismo producto por X€
+//   'combinada' → mezcla de productos distintos por X€
+//
+// Las ofertas pack se aplican greedy (mayor primero).
+// El resto sin cubrir va a precio normal.
 
 export function calcularPrecio(productoId, cantidad, precioBase, ofertas) {
   const ofertasProducto = (ofertas || [])
-    .filter(o => o.producto_id === productoId && o.activa !== false)
-    .sort((a, b) => b.cantidad_pack - a.cantidad_pack) // mayor primero
+    .filter(o => o.producto_id === productoId && o.activa !== false && o.tipo !== 'combinada')
+    .sort((a, b) => b.cantidad_pack - a.cantidad_pack)
 
   if (!ofertasProducto.length) {
     return { total: redondear(precioBase * cantidad), desglose: null }
@@ -25,8 +25,8 @@ export function calcularPrecio(productoId, cantidad, precioBase, ofertas) {
     const nPacks = Math.floor(restante / oferta.cantidad_pack)
     if (nPacks > 0) {
       const unidades = nPacks * oferta.cantidad_pack
-      const coste = nPacks * oferta.precio_pack
-      total += coste
+      const coste    = nPacks * oferta.precio_pack
+      total   += coste
       restante -= unidades
       desglose.push({
         tipo: 'pack',
@@ -54,16 +54,28 @@ export function calcularPrecio(productoId, cantidad, precioBase, ofertas) {
 
   const hayOferta = desglose.some(d => d.tipo === 'pack')
   return {
-    total: redondear(total),
+    total:    redondear(total),
     desglose: hayOferta ? desglose : null,
   }
 }
 
 export function calcularTotalTicket(items, ofertas) {
-  return items.reduce((sum, item) => {
+  return redondear(items.reduce((sum, item) => {
     const { total } = calcularPrecio(item.id, item.cantidad, item.precio, ofertas)
     return sum + total
-  }, 0)
+  }, 0))
+}
+
+// Detecta ofertas combinadas que aplican al ticket actual
+export function detectarOfertasCombinadas(items, ofertas) {
+  const combinadas = (ofertas || []).filter(o => o.tipo === 'combinada' && o.activa !== false)
+  return combinadas.filter(oferta => {
+    if (!oferta.productos_requeridos) return false
+    return oferta.productos_requeridos.every(req => {
+      const item = items.find(i => i.id === req.producto_id)
+      return item && item.cantidad >= req.cantidad
+    })
+  })
 }
 
 function redondear(n) {

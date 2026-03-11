@@ -64,6 +64,16 @@ export async function deleteProducto(id) {
   if (error) throw error
 }
 
+export async function getCategorias() {
+  const { data, error } = await supabase
+    .from('productos')
+    .select('categoria')
+    .eq('activo', true)
+  if (error) return []
+  const cats = [...new Set(data.map(p => p.categoria))].sort()
+  return cats
+}
+
 // ─── STOCK ───────────────────────────────────────────────────
 export async function getStockCaseta(casetaId) {
   const { data, error } = await supabase
@@ -71,7 +81,6 @@ export async function getStockCaseta(casetaId) {
     .select('producto_id, cantidad')
     .eq('caseta_id', casetaId)
   if (error) throw error
-  // Devolver como map { producto_id -> cantidad }
   return Object.fromEntries(data.map(s => [s.producto_id, s.cantidad]))
 }
 
@@ -119,6 +128,21 @@ export async function getCasetas() {
   return data
 }
 
+export async function upsertCaseta(caseta) {
+  const { data, error } = await supabase
+    .from('casetas')
+    .upsert(caseta, { onConflict: 'id' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteCaseta(id) {
+  const { error } = await supabase.from('casetas').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ─── USUARIOS / PERFILES ─────────────────────────────────────
 export async function getPerfiles() {
   const { data, error } = await supabase
@@ -130,7 +154,6 @@ export async function getPerfiles() {
 }
 
 export async function crearUsuario({ nombre, email, password, rol, caseta_id }) {
-  // Llama a la Edge Function que usa service_role internamente
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crear-usuario`,
@@ -167,17 +190,11 @@ export async function getCajaAbierta(casetaId) {
 }
 
 export async function abrirCaja(casetaId, empleadoId, aperturaDinero) {
-  // Verificar que no haya ya una caja abierta
   const existente = await getCajaAbierta(casetaId)
   if (existente) return existente
-
   const { data, error } = await supabase
     .from('cajas')
-    .insert({
-      caseta_id: casetaId,
-      abierta_por: empleadoId,
-      apertura_dinero: aperturaDinero,
-    })
+    .insert({ caseta_id: casetaId, abierta_por: empleadoId, apertura_dinero: aperturaDinero })
     .select()
     .single()
   if (error) throw error
@@ -187,12 +204,7 @@ export async function abrirCaja(casetaId, empleadoId, aperturaDinero) {
 export async function cerrarCaja(cajaId, empleadoId, dineroContado) {
   const { error } = await supabase
     .from('cajas')
-    .update({
-      estado: 'CERRADA',
-      cerrada_por: empleadoId,
-      cerrada_en: new Date().toISOString(),
-      dinero_contado: dineroContado,
-    })
+    .update({ estado: 'CERRADA', cerrada_por: empleadoId, cerrada_en: new Date().toISOString(), dinero_contado: dineroContado })
     .eq('id', cajaId)
   if (error) throw error
 }
@@ -208,7 +220,6 @@ export async function getResumenCaja(cajaId) {
 
 // ─── TICKETS ─────────────────────────────────────────────────
 export async function crearTicket(payload) {
-  // Usa la función SQL que hace todo en una transacción atómica
   const { data, error } = await supabase.rpc('crear_ticket', {
     p_caja_id:     payload.cajaId,
     p_caseta_id:   payload.casetaId,
@@ -220,12 +231,52 @@ export async function crearTicket(payload) {
     p_items:       payload.items,
   })
   if (error) throw error
-  return data // ticket_id
+  return data
+}
+
+export async function getTicketsTurno(cajaId) {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('*, ticket_items(*, productos(nombre)), perfiles(nombre)')
+    .eq('caja_id', cajaId)
+    .order('creado_en', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function getTicketsPorRango(casetaId, desde, hasta) {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('*, ticket_items(cantidad, total_linea, nombre_producto), perfiles(nombre), casetas(nombre)')
+    .eq('caseta_id', casetaId)
+    .gte('creado_en', desde)
+    .lte('creado_en', hasta)
+    .order('creado_en', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function getTicketsAdmin(desde, hasta, casetaId) {
+  let q = supabase
+    .from('tickets')
+    .select('*, ticket_items(cantidad, total_linea, nombre_producto), casetas(nombre), perfiles(nombre)')
+    .order('creado_en', { ascending: false })
+    .limit(200)
+  if (desde) q = q.gte('creado_en', desde)
+  if (hasta) q = q.lte('creado_en', hasta)
+  if (casetaId) q = q.eq('caseta_id', casetaId)
+  const { data, error } = await q
+  if (error) throw error
+  return data
+}
+
+export async function deleteTicket(id) {
+  const { error } = await supabase.from('tickets').delete().eq('id', id)
+  if (error) throw error
 }
 
 export async function getTicketsHoy(casetaId) {
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
+  const hoy = new Date(); hoy.setHours(0,0,0,0)
   const { data, error } = await supabase
     .from('tickets')
     .select('*, perfiles(nombre)')
@@ -236,36 +287,51 @@ export async function getTicketsHoy(casetaId) {
   return data
 }
 
-export async function getTicketsAdmin() {
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  const { data, error } = await supabase
-    .from('tickets')
-    .select('*, casetas(nombre), perfiles(nombre)')
-    .gte('creado_en', hoy.toISOString())
-    .order('creado_en', { ascending: false })
-    .limit(50)
-  if (error) throw error
-  return data
+// ─── FAVORITOS (localStorage) ─────────────────────────────────
+export function getFavoritos() {
+  try { return JSON.parse(localStorage.getItem('tpv_favoritos') || '[]') } catch { return [] }
+}
+export function toggleFavorito(productoId) {
+  const favs = getFavoritos()
+  const idx  = favs.indexOf(productoId)
+  if (idx >= 0) favs.splice(idx, 1)
+  else favs.unshift(productoId)
+  localStorage.setItem('tpv_favoritos', JSON.stringify(favs.slice(0, 20)))
+  return favs
 }
 
 // ─── STATS ADMIN ─────────────────────────────────────────────
 export async function getStatsAdmin() {
   const hoy = new Date(); hoy.setHours(0,0,0,0)
-
   const [ticketsRes, stockBajoRes] = await Promise.all([
-    supabase
-      .from('tickets')
-      .select('total, metodo_pago, casetas(nombre)')
-      .gte('creado_en', hoy.toISOString()),
-    supabase
-      .from('stock')
-      .select('cantidad, productos(nombre, categoria), casetas(nombre)')
-      .lt('cantidad', 10),
+    supabase.from('tickets').select('total, metodo_pago, casetas(nombre)').gte('creado_en', hoy.toISOString()),
+    supabase.from('stock').select('cantidad, productos(nombre, categoria), casetas(nombre)').lt('cantidad', 10),
   ])
-
   return {
-    tickets: ticketsRes.data || [],
+    tickets:   ticketsRes.data  || [],
     stockBajo: stockBajoRes.data || [],
   }
+}
+
+export async function getVentasPorDia(casetaId, año, mes) {
+  const desde = new Date(año, mes - 1, 1).toISOString()
+  const hasta  = new Date(año, mes, 0, 23, 59, 59).toISOString()
+  let q = supabase
+    .from('tickets')
+    .select('total, metodo_pago, creado_en')
+    .gte('creado_en', desde)
+    .lte('creado_en', hasta)
+  if (casetaId) q = q.eq('caseta_id', casetaId)
+  const { data, error } = await q
+  if (error) throw error
+  // Agrupar por día
+  const porDia = {}
+  ;(data || []).forEach(t => {
+    const dia = t.creado_en.slice(0, 10)
+    if (!porDia[dia]) porDia[dia] = { efectivo: 0, tarjeta: 0, tickets: 0 }
+    porDia[dia].tickets++
+    if (t.metodo_pago === 'efectivo') porDia[dia].efectivo += t.total
+    else porDia[dia].tarjeta += t.total
+  })
+  return porDia
 }
