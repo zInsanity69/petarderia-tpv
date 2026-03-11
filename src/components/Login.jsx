@@ -26,7 +26,7 @@ export default function Login() {
     <div className="splash" style={{ background: 'radial-gradient(ellipse at 50% 0%,#ff4d1c22 0%,transparent 60%),var(--bg)' }}>
       <div style={{ background: 'var(--s1)', border: '1px solid var(--bd)', borderRadius: 20, padding: '40px 36px', width: '100%', maxWidth: 400 }}>
         <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '2.4rem', color: 'var(--ac)', letterSpacing: 2, textAlign: 'center', marginBottom: 4 }}>
-          💥 La Petardería
+          💥 Caballer
         </div>
         <div style={{ textAlign: 'center', color: 'var(--tx2)', fontSize: '.82rem', marginBottom: 28 }}>
           Sistema TPV Profesional
@@ -40,7 +40,7 @@ export default function Login() {
             type="email" value={email} autoComplete="email"
             onChange={e => setEmail(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && go()}
-            placeholder="usuario@lapetarderia.es"
+            placeholder="usuario@caballer.es"
           />
         </div>
         <div className="fg">

@@ -40,7 +40,7 @@ export default function App() {
   if (loading) return (
     <div className="splash">
       <div className="splash-logo">💥</div>
-      <div className="splash-text">La Petardería TPV</div>
+      <div className="splash-text">Caballer TPV</div>
       <div className="spinner" />
     </div>
   )
