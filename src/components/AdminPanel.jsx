@@ -192,25 +192,27 @@ function PanelVentas({ casetas, onVerDia }) {
                 const tot = d ? d.efectivo + d.tarjeta : 0
                 const esHoy = key === hoy.toISOString().slice(0, 10)
                 const intensidad = tot > 0 ? Math.max(0.12, tot / maxDia) : 0
+                const textoColor = tot > 0 ? '#1a0a00' : 'var(--tx2)'
+                const textoSub   = tot > 0 ? '#3a1500' : 'var(--tx2)'
                 return (
                   <div key={dia}
                     onClick={() => tot > 0 && onVerDia(key)}
                     style={{
                       borderRadius: 8, padding: '6px 4px', textAlign: 'center',
-                      background: tot > 0 ? `rgba(255,77,28,${intensidad})` : 'var(--s2)',
+                      background: tot > 0 ? `rgba(255,140,60,${intensidad})` : 'var(--s2)',
                       border: `2px solid ${esHoy ? 'var(--ac)' : 'transparent'}`,
                       minHeight: 54,
                       cursor: tot > 0 ? 'pointer' : 'default',
                       transition: 'filter .15s',
                     }}
-                    onMouseEnter={e => { if (tot > 0) e.currentTarget.style.filter = 'brightness(1.25)' }}
+                    onMouseEnter={e => { if (tot > 0) e.currentTarget.style.filter = 'brightness(1.15)' }}
                     onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
                   >
-                    <div style={{ fontSize: '.7rem', color: tot > 0 ? 'var(--tx)' : 'var(--tx2)', fontWeight: 700 }}>{dia}</div>
+                    <div style={{ fontSize: '.7rem', color: textoColor, fontWeight: 700 }}>{dia}</div>
                     {tot > 0 && (
                       <>
-                        <div style={{ fontSize: '.62rem', color: 'var(--ac)', fontWeight: 700, marginTop: 2 }}>{fmt(tot)}</div>
-                        <div style={{ fontSize: '.56rem', color: 'var(--tx2)' }}>{d.tickets}t</div>
+                        <div style={{ fontSize: '.62rem', color: textoColor, fontWeight: 800, marginTop: 2 }}>{fmt(tot)}</div>
+                        <div style={{ fontSize: '.56rem', color: textoSub }}>{d.tickets}t</div>
                       </>
                     )}
                   </div>

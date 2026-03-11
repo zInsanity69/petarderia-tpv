@@ -643,18 +643,20 @@ export default function EmpleadoPanel({ perfil, casetas }) {
               <button className="bsc" onClick={() => setShowScan(true)}>📷</button>
             </div>
 
-            {/* Tabs todos / favoritos */}
+            {/* Tabs todos / favoritos / ofertas */}
             <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--bd)' }}>
-              <button onClick={() => setTabTPV('todos')} style={{
-                flex: 1, padding: '9px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer',
-                background: 'transparent', border: 'none', borderBottom: `2px solid ${tabTPV === 'todos' ? 'var(--ac)' : 'transparent'}`,
-                color: tabTPV === 'todos' ? 'var(--ac)' : 'var(--tx2)', fontFamily: "'DM Sans',sans-serif",
-              }}>Todos</button>
-              <button onClick={() => setTabTPV('favoritos')} style={{
-                flex: 1, padding: '9px', fontSize: '.8rem', fontWeight: 600, cursor: 'pointer',
-                background: 'transparent', border: 'none', borderBottom: `2px solid ${tabTPV === 'favoritos' ? 'var(--gold)' : 'transparent'}`,
-                color: tabTPV === 'favoritos' ? 'var(--gold)' : 'var(--tx2)', fontFamily: "'DM Sans',sans-serif",
-              }}>⭐ Favoritos ({favoritos.length})</button>
+              {[
+                ['todos',     'Todos',                     'var(--ac)'],
+                ['favoritos', `⭐ Favs (${favoritos.length})`, 'var(--gold)'],
+                ['ofertas',   `🏷 Ofertas (${ofertas.length})`, 'var(--green)'],
+              ].map(([k, l, color]) => (
+                <button key={k} onClick={() => setTabTPV(k)} style={{
+                  flex: 1, padding: '9px 4px', fontSize: '.75rem', fontWeight: 600, cursor: 'pointer',
+                  background: 'transparent', border: 'none',
+                  borderBottom: `2px solid ${tabTPV === k ? color : 'transparent'}`,
+                  color: tabTPV === k ? color : 'var(--tx2)', fontFamily: "'DM Sans',sans-serif",
+                }}>{l}</button>
+              ))}
             </div>
 
             {/* Categorías (solo en tab todos) */}
@@ -667,7 +669,7 @@ export default function EmpleadoPanel({ perfil, casetas }) {
             )}
 
             {/* Botones rápidos */}
-            {botonesRapidos.length > 0 && !busq && (
+            {botonesRapidos.length > 0 && !busq && tabTPV !== 'ofertas' && (
               <div style={{ padding: '7px 10px', borderBottom: '1px solid var(--bd)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '.67rem', color: 'var(--tx2)', alignSelf: 'center', marginRight: 2 }}>⚡</span>
                 {botonesRapidos.map(p => (
@@ -684,8 +686,8 @@ export default function EmpleadoPanel({ perfil, casetas }) {
               </div>
             )}
 
-            {/* Grid productos */}
-            <div className="pg">
+            {/* Grid productos — oculto en tab ofertas */}
+            <div className="pg" style={{ display: tabTPV === 'ofertas' ? 'none' : undefined }}>
               {prodsFiltrados.map(p => {
                 const stockDisp = stock[p.id] ?? 0
                 const enT = ticket.find(i => i.id === p.id)
@@ -705,14 +707,81 @@ export default function EmpleadoPanel({ perfil, casetas }) {
               })}
               {tabTPV === 'favoritos' && favoritos.length === 0 && (
                 <div style={{ gridColumn: '1/-1', textAlign: 'center', color: 'var(--tx2)', padding: 30, fontSize: '.85rem' }}>
-                  Mantén pulsado ⭐ en cualquier producto para añadirlo a favoritos
+                  Pulsa ⭐ en cualquier producto para añadirlo a favoritos
+                </div>
+              )}
+              {tabTPV === 'ofertas' && ofertas.length === 0 && (
+                <div style={{ gridColumn: '1/-1', textAlign: 'center', color: 'var(--tx2)', padding: 30, fontSize: '.85rem' }}>
+                  Sin ofertas activas. Créalas en el panel Admin.
                 </div>
               )}
             </div>
+
+            {/* Tab ofertas — tarjetas grandes */}
+            {tabTPV === 'ofertas' && ofertas.length > 0 && (
+              <div style={{ padding: 12, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Combinadas */}
+                {ofertas.filter(o => o.tipo === 'combinada').map(o => {
+                  const sinStock = (o.productos_requeridos || []).some(r => (stock[r.producto_id] ?? 0) < r.cantidad)
+                  return (
+                    <button key={o.id} disabled={sinStock} onClick={() => {
+                      if (sinStock) return
+                      ;(o.productos_requeridos || []).forEach(r => {
+                        const prod = productos.find(p => p.id === r.producto_id)
+                        if (prod) agregar(prod, r.cantidad)
+                      })
+                      showToast(`✓ ${o.etiqueta} añadida`)
+                    }} style={{
+                      background: sinStock ? 'var(--s2)' : 'rgba(96,165,250,.1)',
+                      border: `1px solid ${sinStock ? 'var(--bd)' : 'rgba(96,165,250,.4)'}`,
+                      borderRadius: 'var(--rs)', padding: '13px 14px', cursor: sinStock ? 'not-allowed' : 'pointer',
+                      opacity: sinStock ? .5 : 1, textAlign: 'left', fontFamily: "'DM Sans',sans-serif",
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700, color: sinStock ? 'var(--tx2)' : 'var(--blue)', fontSize: '.95rem' }}>🎁 {o.etiqueta}</span>
+                        <span style={{ fontWeight: 800, color: 'var(--ac)', fontSize: '1.1rem' }}>{fmt(o.precio_pack)}</span>
+                      </div>
+                      <div style={{ fontSize: '.74rem', color: 'var(--tx2)' }}>
+                        {(o.productos_requeridos || []).map(r => `${r.cantidad}× ${r.nombre}`).join(' + ')}
+                      </div>
+                      {sinStock && <div style={{ fontSize: '.7rem', color: 'var(--red)', marginTop: 3 }}>Sin stock suficiente</div>}
+                    </button>
+                  )
+                })}
+                {/* Packs */}
+                {[...new Map(ofertas.filter(o => !o.tipo || o.tipo === 'pack').map(o => [o.producto_id, o])).values()].map(o => {
+                  const prod = productos.find(p => p.id === o.producto_id)
+                  if (!prod) return null
+                  const stockDisp = stock[prod.id] ?? 0
+                  const sinStock = stockDisp < o.cantidad_pack
+                  return (
+                    <button key={o.producto_id} disabled={sinStock} onClick={() => {
+                      if (sinStock) { showToast('Stock insuficiente', 'error'); return }
+                      agregar(prod, o.cantidad_pack)
+                      showToast(`✓ ${o.etiqueta} añadido`)
+                    }} style={{
+                      background: sinStock ? 'var(--s2)' : 'rgba(245,200,66,.08)',
+                      border: `1px solid ${sinStock ? 'var(--bd)' : 'rgba(245,200,66,.35)'}`,
+                      borderRadius: 'var(--rs)', padding: '13px 14px', cursor: sinStock ? 'not-allowed' : 'pointer',
+                      opacity: sinStock ? .5 : 1, textAlign: 'left', fontFamily: "'DM Sans',sans-serif",
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700, color: sinStock ? 'var(--tx2)' : 'var(--gold)', fontSize: '.95rem' }}>📦 {o.etiqueta}</span>
+                        <span style={{ fontWeight: 800, color: 'var(--ac)', fontSize: '1.1rem' }}>{fmt(o.precio_pack)}</span>
+                      </div>
+                      <div style={{ fontSize: '.74rem', color: 'var(--tx2)' }}>
+                        {prod.nombre} · {o.cantidad_pack} unidades · Stock: {stockDisp}
+                      </div>
+                      {sinStock && <div style={{ fontSize: '.7rem', color: 'var(--red)', marginTop: 3 }}>Sin stock suficiente</div>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Panel ticket */}
-          <div className="tp">
+            {/* Panel ticket */}
+            <div className="tp">
             <div className="th">
               <div className="tt">🧾 Ticket</div>
               <div className="tm">{perfil.nombre} · {new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</div>
@@ -726,70 +795,6 @@ export default function EmpleadoPanel({ perfil, casetas }) {
                 ))
               }
             </div>
-
-            {/* Ofertas rápidas */}
-            {ofertas.length > 0 && (
-              <div style={{ borderTop: '1px solid var(--bd)', padding: '8px 10px' }}>
-                <div style={{ fontSize: '.65rem', color: 'var(--tx2)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 5 }}>
-                  🏷 Ofertas rápidas
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {/* Ofertas combinadas — añaden varios productos de golpe */}
-                  {ofertas.filter(o => o.tipo === 'combinada').map(o => {
-                    const sinStock = (o.productos_requeridos || []).some(r => (stock[r.producto_id] ?? 0) < r.cantidad)
-                    return (
-                      <button key={o.id}
-                        disabled={sinStock}
-                        onClick={() => {
-                          if (sinStock) return
-                          ;(o.productos_requeridos || []).forEach(r => {
-                            const prod = productos.find(p => p.id === r.producto_id)
-                            if (prod) agregar(prod, r.cantidad)
-                          })
-                          showToast(`✓ ${o.etiqueta} añadida al ticket`)
-                        }}
-                        style={{
-                          padding: '6px 11px', borderRadius: 20,
-                          border: '1px solid rgba(96,165,250,.35)',
-                          background: 'rgba(96,165,250,.08)',
-                          color: sinStock ? 'var(--tx2)' : 'var(--blue)',
-                          fontSize: '.72rem', fontWeight: 600,
-                          cursor: sinStock ? 'not-allowed' : 'pointer',
-                          fontFamily: "'DM Sans',sans-serif",
-                          opacity: sinStock ? .4 : 1,
-                        }}
-                      >
-                        🎁 {o.etiqueta} · {fmt(o.precio_pack)}
-                      </button>
-                    )
-                  })}
-                  {/* Packs — abren selector de cantidad */}
-                  {[...new Map(ofertas.filter(o => !o.tipo || o.tipo === 'pack').map(o => [o.producto_id, o])).values()].map(o => {
-                    const prod = productos.find(p => p.id === o.producto_id)
-                    if (!prod) return null
-                    const stockDisp = stock[prod.id] ?? 0
-                    return (
-                      <button key={o.producto_id}
-                        onClick={() => abrirModalCantidad(prod)}
-                        disabled={stockDisp === 0}
-                        style={{
-                          padding: '6px 11px', borderRadius: 20,
-                          border: '1px solid rgba(245,200,66,.35)',
-                          background: 'rgba(245,200,66,.07)',
-                          color: stockDisp === 0 ? 'var(--tx2)' : 'var(--gold)',
-                          fontSize: '.72rem', fontWeight: 600,
-                          cursor: stockDisp === 0 ? 'not-allowed' : 'pointer',
-                          fontFamily: "'DM Sans',sans-serif",
-                          opacity: stockDisp === 0 ? .4 : 1,
-                        }}
-                      >
-                        📦 {prod.nombre.length > 16 ? prod.nombre.slice(0,14)+'…' : prod.nombre}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
 
             <div className="tf">
               <div className="tsb"><span>Artículos</span><span>{ticket.reduce((s, i) => s + i.cantidad, 0)}</span></div>
