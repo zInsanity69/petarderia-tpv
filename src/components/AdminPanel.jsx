@@ -17,7 +17,7 @@ const TABS = [
   ['tickets',   '🧾 Tickets'],
   ['productos', '📦 Productos'],
   ['stock',     '📋 Stock'],
-  ['ofertas',   '🏷 Ofertas'],
+  ['ofertas',   '🏷️ Ofertas'],
   ['casetas',   '🏪 Casetas'],
   ['usuarios',  '👥 Usuarios'],
 ]
