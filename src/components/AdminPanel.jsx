@@ -5,7 +5,7 @@ import {
   getOfertas, upsertOferta, deleteOferta,
   getPerfiles, updatePerfil, crearUsuario,
   getCasetas, upsertCaseta, deleteCaseta,
-  getStatsAdmin, getTicketsAdmin,
+  getStatsAdmin, getTicketsAdmin, deleteTicket,
   setStock, getStockCaseta,
   getVentasPorDia,
 } from '../lib/api.js'
@@ -17,7 +17,7 @@ const TABS = [
   ['tickets',   '🧾 Tickets'],
   ['productos', '📦 Productos'],
   ['stock',     '📋 Stock'],
-  ['ofertas',   '🏷️ Ofertas'],
+  ['ofertas',   '🏷 Ofertas'],
   ['casetas',   '🏪 Casetas'],
   ['usuarios',  '👥 Usuarios'],
 ]
@@ -265,8 +265,7 @@ function PanelTickets({ casetas }) {
   const eliminar = async (id) => {
     if (!window.confirm('¿Eliminar este ticket? El stock NO se restaura.')) return
     try {
-      const { error } = await import('../lib/supabase.js').then(m => m.supabase.from('tickets').delete().eq('id', id))
-      if (error) throw error
+      await deleteTicket(id)
       setTickets(prev => prev.filter(t => t.id !== id))
       showToast('Ticket eliminado')
     } catch (e) { showToast(e.message, 'error') }
@@ -752,7 +751,7 @@ function GestionOfertas() {
 function GestionCasetas({ casetas, setCasetas }) {
   const [toast, setToast] = useState(null)
   const [editId, setEditId] = useState(null)
-  const F0 = { nombre: '' }
+  const F0 = { nombre: '', direccion: '' }
   const [form, setForm] = useState(F0)
 
   const showToast = (msg,type='ok') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000) }
@@ -760,7 +759,7 @@ function GestionCasetas({ casetas, setCasetas }) {
   const guardar = async () => {
     if (!form.nombre.trim()) { showToast('El nombre es obligatorio','error'); return }
     try {
-      const data = await upsertCaseta({ ...(editId?{id:editId}:{}), nombre:form.nombre.trim() })
+      const data = await upsertCaseta({ ...(editId?{id:editId}:{}), nombre:form.nombre.trim(), direccion: form.direccion.trim() || null })
       if (editId) { setCasetas(prev=>prev.map(c=>c.id===editId?data:c)); showToast('Caseta actualizada ✓') }
       else { setCasetas(prev=>[...prev,data]); showToast('Caseta creada ✓') }
       setForm(F0); setEditId(null)
@@ -779,7 +778,10 @@ function GestionCasetas({ casetas, setCasetas }) {
       <div className="stit">{editId?'✏️ Editar Caseta':'➕ Nueva Caseta'}</div>
       <div className="iform">
         <div className="fg"><label>Nombre de la caseta</label>
-          <input value={form.nombre} onChange={e=>setForm({nombre:e.target.value})} placeholder="Caballer Nueva Caseta" />
+          <input value={form.nombre} onChange={e=>setForm({...form, nombre:e.target.value})} placeholder="Caballer Ruzafa" />
+        </div>
+        <div className="fg"><label>Dirección (opcional)</label>
+          <input value={form.direccion} onChange={e=>setForm({...form, direccion:e.target.value})} placeholder="Calle Mayor 12, Valencia" />
         </div>
         <div style={{display:'flex',gap:9}}>
           <button className="btn-add" onClick={guardar}>{editId?'Guardar':'Crear caseta'}</button>
@@ -790,15 +792,15 @@ function GestionCasetas({ casetas, setCasetas }) {
       <div className="stit">Casetas ({casetas.length})</div>
       <div className="tw">
         <table>
-          <thead><tr><th>Nombre</th><th>ID</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Dirección</th><th>Acciones</th></tr></thead>
           <tbody>
             {casetas.map(c=>(
               <tr key={c.id}>
                 <td style={{fontWeight:600}}>{c.nombre}</td>
-                <td style={{color:'var(--tx2)',fontSize:'.72rem',fontFamily:'monospace'}}>{c.id}</td>
+                <td style={{color:'var(--tx2)'}}>{c.direccion || <span style={{opacity:.4}}>—</span>}</td>
                 <td>
                   <div className="acell">
-                    <button className="btn-edit" onClick={()=>{setEditId(c.id);setForm({nombre:c.nombre})}}>Editar</button>
+                    <button className="btn-edit" onClick={()=>{setEditId(c.id);setForm({nombre:c.nombre, direccion: c.direccion||''})}}>Editar</button>
                     <button className="btn-del" onClick={()=>eliminar(c.id)}>Eliminar</button>
                   </div>
                 </td>

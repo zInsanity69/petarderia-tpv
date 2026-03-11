@@ -9,18 +9,6 @@ import {
 import { calcularPrecio, calcularTotalTicket, fmt } from '../lib/precios.js'
 import Scanner from './Scanner.jsx'
 
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const o = ctx.createOscillator(), g = ctx.createGain()
-    o.connect(g); g.connect(ctx.destination)
-    o.frequency.value = 880; o.type = 'sine'
-    g.gain.setValueAtTime(0.3, ctx.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18)
-    o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.18)
-  } catch (e) {}
-}
-
 function Toast({ msg, type }) {
   return <div className="twrap"><div className={`toast ${type === 'error' ? 'te2' : 'tok'}`}>{msg}</div></div>
 }
@@ -501,7 +489,6 @@ export default function EmpleadoPanel({ perfil, casetas }) {
       return [...prev, { ...prod, cantidad }]
     })
     setShowScan(false)
-    playBeep()
   }, [stock])
 
   const abrirModalCantidad = (prod) => {
@@ -739,6 +726,36 @@ export default function EmpleadoPanel({ perfil, casetas }) {
                 ))
               }
             </div>
+
+            {/* Ofertas rápidas — productos con oferta para añadir directo */}
+            {ofertas.length > 0 && (
+              <div style={{ borderTop: '1px solid var(--bd)', padding: '8px 10px' }}>
+                <div style={{ fontSize: '.65rem', color: 'var(--tx2)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 5 }}>
+                  🏷 Añadir con oferta
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {[...new Map(ofertas.map(o => [o.producto_id, o])).values()].map(o => {
+                    const prod = productos.find(p => p.id === o.producto_id)
+                    if (!prod) return null
+                    const stockDisp = stock[prod.id] ?? 0
+                    return (
+                      <button key={o.producto_id} onClick={() => abrirModalCantidad(prod)}
+                        disabled={stockDisp === 0}
+                        style={{
+                          padding: '5px 9px', borderRadius: 20, border: '1px solid rgba(245,200,66,.35)',
+                          background: 'rgba(245,200,66,.07)', color: stockDisp === 0 ? 'var(--tx2)' : 'var(--gold)',
+                          fontSize: '.7rem', fontWeight: 600, cursor: stockDisp === 0 ? 'not-allowed' : 'pointer',
+                          fontFamily: "'DM Sans',sans-serif", opacity: stockDisp === 0 ? .4 : 1,
+                        }}
+                      >
+                        {prod.nombre.length > 18 ? prod.nombre.slice(0, 16) + '…' : prod.nombre}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="tf">
               <div className="tsb"><span>Artículos</span><span>{ticket.reduce((s, i) => s + i.cantidad, 0)}</span></div>
               <div className="ttr">
@@ -771,7 +788,14 @@ export default function EmpleadoPanel({ perfil, casetas }) {
           onClose={() => setProdModal(null)}
         />
       )}
-      {showScan && <Scanner onDetect={p => { abrirModalCantidad(p); setShowScan(false) }} onClose={() => setShowScan(false)} />}
+      {showScan && (
+        <Scanner
+          onDetect={(p, qty) => { agregar(p, qty || 1); setShowScan(false) }}
+          onClose={() => setShowScan(false)}
+          stock={stock}
+          ofertas={ofertas}
+        />
+      )}
       {showPago && (
         <ModalPago total={total} onConfirm={confirmarVenta} onClose={() => setShowPago(false)}
           modoRapido={modoRapido} onToggleModoRapido={() => setModoRapido(m => !m)} />

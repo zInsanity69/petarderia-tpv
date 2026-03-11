@@ -2,28 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { BrowserMultiFormatReader, BarcodeFormat } from '@zxing/browser'
 import { getProductoByEan } from '../lib/api.js'
 
-function playBeep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    const o = ctx.createOscillator(), g = ctx.createGain()
-    o.connect(g); g.connect(ctx.destination)
-    o.frequency.value = 880; o.type = 'sine'
-    g.gain.setValueAtTime(0.3, ctx.currentTime)
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18)
-    o.start(ctx.currentTime); o.stop(ctx.currentTime + 0.18)
-  } catch (e) {}
-}
-
-export default function Scanner({ onDetect, onClose }) {
+export default function Scanner({ onDetect, onClose, ofertas = [], stock = {} }) {
   const videoRef   = useRef(null)
   const readerRef  = useRef(null)
   const lastCode   = useRef('')
   const lastTime   = useRef(0)
 
-  const [estado, setEstado]   = useState('iniciando') // iniciando | activo | error
-  const [msg, setMsg]         = useState('')
-  const [manual, setManual]   = useState('')
-  const [buscando, setBuscando] = useState(false)
+  const [estado,    setEstado]    = useState('iniciando')
+  const [msg,       setMsg]       = useState('')
+  const [manual,    setManual]    = useState('')
+  const [buscando,  setBuscando]  = useState(false)
+  // producto encontrado → esperando confirmar cantidad
+  const [prodPendiente, setProdPendiente] = useState(null)
+  const [qty,       setQty]       = useState(1)
 
   useEffect(() => {
     let cancelled = false
@@ -31,15 +22,11 @@ export default function Scanner({ onDetect, onClose }) {
     const iniciar = async () => {
       try {
         const hints = new Map()
-        hints.set(2 /* DecodeHintType.POSSIBLE_FORMATS */, [
-          BarcodeFormat.EAN_13,
-          BarcodeFormat.EAN_8,
-          BarcodeFormat.CODE_128,
-          BarcodeFormat.CODE_39,
-          BarcodeFormat.UPC_A,
-          BarcodeFormat.UPC_E,
+        hints.set(2, [
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+          BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
         ])
-
         const reader = new BrowserMultiFormatReader(hints, {
           delayBetweenScanAttempts: 100,
           delayBetweenScanSuccess: 1500,
@@ -48,44 +35,30 @@ export default function Scanner({ onDetect, onClose }) {
 
         const devices = await BrowserMultiFormatReader.listVideoInputDevices()
         if (!devices.length) throw new Error('No se encontró ninguna cámara')
-
-        // Preferir cámara trasera
-        const trasera = devices.find(d =>
-          /back|rear|trasera|environment/i.test(d.label)
-        ) || devices[devices.length - 1]
-
+        const trasera = devices.find(d => /back|rear|trasera|environment/i.test(d.label)) || devices[devices.length - 1]
         if (cancelled) return
         setEstado('activo')
 
-        await reader.decodeFromVideoDevice(
-          trasera.deviceId,
-          videoRef.current,
-          async (result, err) => {
-            if (cancelled || !result) return
-
-            const codigo = result.getText()
-            const now = Date.now()
-
-            // Evitar escanear el mismo código en menos de 2 segundos
-            if (codigo === lastCode.current && now - lastTime.current < 2000) return
-            lastCode.current = codigo
-            lastTime.current = now
-
-            playBeep()
-            if (navigator.vibrate) navigator.vibrate([80])
-            setMsg(`Leyendo: ${codigo}...`)
-
-            // Buscar en Supabase
-            const prod = await getProductoByEan(codigo)
-            if (prod) {
-              onDetect(prod)
-            } else {
-              setMsg(`Código ${codigo} no encontrado en el catálogo`)
-              setManual(codigo)
-              setTimeout(() => setMsg(''), 4000)
-            }
+        await reader.decodeFromVideoDevice(trasera.deviceId, videoRef.current, async (result, err) => {
+          if (cancelled || !result) return
+          const codigo = result.getText()
+          const now = Date.now()
+          if (codigo === lastCode.current && now - lastTime.current < 2000) return
+          lastCode.current = codigo
+          lastTime.current = now
+          if (navigator.vibrate) navigator.vibrate([80])
+          setMsg(`Leyendo: ${codigo}...`)
+          const prod = await getProductoByEan(codigo)
+          if (prod) {
+            setProdPendiente(prod)
+            setQty(1)
+            setMsg('')
+          } else {
+            setMsg(`Código ${codigo} no encontrado`)
+            setManual(codigo)
+            setTimeout(() => setMsg(''), 3000)
           }
-        )
+        })
       } catch (e) {
         if (cancelled) return
         setEstado('error')
@@ -100,116 +73,123 @@ export default function Scanner({ onDetect, onClose }) {
     }
 
     iniciar()
-
-    return () => {
-      cancelled = true
-      try { readerRef.current?.reset() } catch (e) {}
-    }
+    return () => { cancelled = true; try { readerRef.current?.reset() } catch (e) {} }
   }, [])
 
   const buscarManual = async () => {
     const q = manual.trim()
     if (!q) return
-    setBuscando(true)
-    setMsg('')
+    setBuscando(true); setMsg('')
     try {
       const prod = await getProductoByEan(q)
-      if (prod) {
-        playBeep()
-        onDetect(prod)
-      } else {
-        setMsg(`Código "${q}" no encontrado en el catálogo`)
-      }
-    } catch (e) {
-      setMsg('Error buscando: ' + e.message)
-    } finally {
-      setBuscando(false)
-    }
+      if (prod) { setProdPendiente(prod); setQty(1) }
+      else setMsg(`Código "${q}" no encontrado`)
+    } catch (e) { setMsg('Error: ' + e.message) }
+    finally { setBuscando(false) }
   }
+
+  const confirmar = () => {
+    if (!prodPendiente) return
+    onDetect(prodPendiente, qty)
+    setProdPendiente(null)
+    setQty(1)
+    lastCode.current = '' // permitir escanear mismo producto otra vez
+  }
+
+  const stockDisp = prodPendiente ? (stock[prodPendiente.id] ?? 0) : 0
+  const fmt = n => n.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
 
   return (
     <div className="mo" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="mc">
         <div className="mt-modal">📷 Escanear Producto</div>
 
-        {/* Visor cámara */}
-        <div className="scp">
-          <video ref={videoRef} autoPlay playsInline muted />
-
-          {estado === 'activo' && (
-            <>
-              {/* Marco */}
-              <div style={{
-                position: 'absolute', inset: '12%',
-                border: '3px solid var(--ac)', borderRadius: 12,
-                boxShadow: '0 0 0 9999px rgba(0,0,0,.5)',
-                pointerEvents: 'none',
-              }} />
-              {/* Línea de escaneo animada */}
-              <div style={{
-                position: 'absolute',
-                top: '12%', left: '12%', right: '12%',
-                height: 3,
-                background: 'linear-gradient(90deg,transparent,var(--ac),transparent)',
-                animation: 'scanbeam 2s ease-in-out infinite',
-                pointerEvents: 'none',
-              }} />
-            </>
-          )}
-
-          {estado === 'iniciando' && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.75)', gap: 10 }}>
-              <div className="spinner" />
-              <span style={{ fontSize: '.82rem', color: 'var(--tx2)' }}>Iniciando cámara...</span>
+        {/* Si hay producto pendiente mostramos selector de cantidad */}
+        {prodPendiente ? (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: 4 }}>{prodPendiente.nombre}</div>
+            <div style={{ fontSize: '.82rem', color: 'var(--tx2)', marginBottom: 16 }}>
+              {fmt(prodPendiente.precio)}/u. · Stock disponible: {stockDisp}
             </div>
-          )}
 
-          {estado === 'error' && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.85)', gap: 10, padding: 20, textAlign: 'center' }}>
-              <span style={{ fontSize: '2rem' }}>📷</span>
-              <span style={{ fontSize: '.82rem', color: 'var(--red)' }}>{msg}</span>
+            {/* Teclado rápido */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 6, marginBottom: 12 }}>
+              {[1,2,3,4,5,6,8,10,15,20].map(n => (
+                <button key={n} onClick={() => setQty(n)} style={{
+                  padding: '10px 4px', borderRadius: 'var(--rs)',
+                  background: qty === n ? 'var(--ac)' : 'var(--s2)',
+                  border: '1px solid', borderColor: qty === n ? 'var(--ac)' : 'var(--bd)',
+                  color: qty === n ? 'white' : 'var(--tx)', fontWeight: 700,
+                  cursor: 'pointer', fontSize: '1rem', fontFamily: "'DM Sans',sans-serif",
+                }}>{n}</button>
+              ))}
             </div>
-          )}
-        </div>
 
-        {/* Indicador activo */}
-        {estado === 'activo' && (
-          <div style={{ textAlign: 'center', fontSize: '.74rem', color: 'var(--green)', margin: '5px 0 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', animation: 'pulse 1s ease-in-out infinite' }} />
-            Cámara activa · Apunta al código de barras
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <button className="qb" style={{ width: 42, height: 42, fontSize: '1.2rem' }} onClick={() => setQty(q => Math.max(1, q - 1))}>−</button>
+              <input type="number" min="1" max={stockDisp} value={qty}
+                onChange={e => setQty(Math.max(1, Math.min(stockDisp, parseInt(e.target.value) || 1)))}
+                onKeyDown={e => e.key === 'Enter' && confirmar()}
+                style={{ flex: 1, background: 'var(--s2)', border: '2px solid var(--ac)', borderRadius: 'var(--rs)', padding: '12px', color: 'var(--tx)', fontSize: '1.6rem', fontWeight: 700, textAlign: 'center', outline: 'none', fontFamily: "'DM Sans',sans-serif" }}
+                inputMode="numeric" autoFocus />
+              <button className="qb" style={{ width: 42, height: 42, fontSize: '1.2rem' }} onClick={() => setQty(q => Math.min(stockDisp, q + 1))}>+</button>
+            </div>
+
+            <button className="btn-p" onClick={confirmar}>
+              Añadir {qty} × {prodPendiente.nombre} · {fmt(prodPendiente.precio * qty)}
+            </button>
+            <button className="btn-s" onClick={() => { setProdPendiente(null); lastCode.current = '' }}>
+              ← Volver a escanear
+            </button>
           </div>
+        ) : (
+          <>
+            {/* Visor cámara */}
+            <div className="scp">
+              <video ref={videoRef} autoPlay playsInline muted />
+              {estado === 'activo' && (
+                <>
+                  <div style={{ position: 'absolute', inset: '12%', border: '3px solid var(--ac)', borderRadius: 12, boxShadow: '0 0 0 9999px rgba(0,0,0,.5)', pointerEvents: 'none' }} />
+                  <div style={{ position: 'absolute', top: '12%', left: '12%', right: '12%', height: 3, background: 'linear-gradient(90deg,transparent,var(--ac),transparent)', animation: 'scanbeam 2s ease-in-out infinite', pointerEvents: 'none' }} />
+                </>
+              )}
+              {estado === 'iniciando' && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.75)', gap: 10 }}>
+                  <div className="spinner" />
+                  <span style={{ fontSize: '.82rem', color: 'var(--tx2)' }}>Iniciando cámara...</span>
+                </div>
+              )}
+              {estado === 'error' && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.85)', gap: 10, padding: 20, textAlign: 'center' }}>
+                  <span style={{ fontSize: '2rem' }}>📷</span>
+                  <span style={{ fontSize: '.82rem', color: 'var(--red)' }}>{msg}</span>
+                </div>
+              )}
+            </div>
+
+            {estado === 'activo' && (
+              <div style={{ textAlign: 'center', fontSize: '.74rem', color: 'var(--green)', margin: '5px 0 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--green)', display: 'inline-block', animation: 'pulse 1s ease-in-out infinite' }} />
+                Cámara activa · Apunta al código de barras
+              </div>
+            )}
+
+            {msg && estado !== 'error' && (
+              <div className="info-box" style={{ marginBottom: 8, textAlign: 'center' }}>{msg}</div>
+            )}
+
+            <div style={{ marginTop: 8, fontSize: '.74rem', color: 'var(--tx2)', marginBottom: 5 }}>O introduce el EAN manualmente:</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="si" style={{ flex: 1 }} placeholder="8410278001..."
+                value={manual} onChange={e => setManual(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && buscarManual()} inputMode="numeric" />
+              <button style={{ background: 'var(--ac)', border: 'none', borderRadius: 'var(--rs)', padding: '9px 15px', color: 'white', fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", opacity: buscando ? .5 : 1 }}
+                onClick={buscarManual} disabled={buscando}>{buscando ? '...' : 'Buscar'}</button>
+            </div>
+          </>
         )}
 
-        {/* Mensaje feedback */}
-        {msg && estado !== 'error' && (
-          <div className="info-box" style={{ marginBottom: 8, textAlign: 'center' }}>{msg}</div>
-        )}
-
-        {/* Búsqueda manual */}
-        <div style={{ marginTop: 8, fontSize: '.74rem', color: 'var(--tx2)', marginBottom: 5 }}>
-          O introduce el código EAN manualmente:
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            className="si" style={{ flex: 1 }}
-            placeholder="8410278001..."
-            value={manual}
-            onChange={e => setManual(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && buscarManual()}
-            inputMode="numeric"
-          />
-          <button
-            style={{ background: 'var(--ac)', border: 'none', borderRadius: 'var(--rs)', padding: '9px 15px', color: 'white', fontWeight: 700, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", opacity: buscando ? .5 : 1 }}
-            onClick={buscarManual}
-            disabled={buscando}
-          >
-            {buscando ? '...' : 'Buscar'}
-          </button>
-        </div>
-
-        <button className="btn-s" style={{ marginTop: 12 }} onClick={onClose}>
-          Cerrar escáner
-        </button>
+        <button className="btn-s" style={{ marginTop: 12 }} onClick={onClose}>Cerrar escáner</button>
       </div>
     </div>
   )
