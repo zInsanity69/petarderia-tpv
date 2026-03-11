@@ -60,7 +60,7 @@ function Dashboard({ casetas }) {
         <div className="sc"><div className="sv">{stats.tickets.length}</div><div className="sl2">Tickets hoy</div></div>
         <div className="sc"><div className="sv">{fmt(efectivoHoy)}</div><div className="sl2">Efectivo hoy</div></div>
         <div className="sc"><div className="sv">{fmt(tarjetaHoy)}</div><div className="sl2">Tarjeta hoy</div></div>
-        <div className="sc"><div className="sv" style={{ color: stats.stockBajo.length > 5 ? 'var(--red)' : 'var(--ac)' }}>{stats.stockBajo.length}</div><div className="sl2">Stock bajo</div></div>
+        <div className="sc"><div className="sv" style={{ color: (stats.stockBajo.length + stats.stockCero.length) > 5 ? 'var(--red)' : 'var(--ac)' }}>{stats.stockBajo.length + stats.stockCero.length}</div><div className="sl2">Stock bajo/agotado</div></div>
         <div className="sc"><div className="sv">{casetas.length}</div><div className="sl2">Casetas</div></div>
       </div>
 
@@ -98,20 +98,68 @@ function Dashboard({ casetas }) {
         </table>
       </div>
 
-      <div className="stit">Stock crítico</div>
-      <div className="tw">
+      <StockAlerta stockBajo={stats.stockBajo} stockCero={stats.stockCero} casetas={casetas} />
+    </>
+  )
+}
+
+function StockAlerta({ stockBajo, stockCero, casetas }) {
+  const [casetaSel, setCasetaSel] = useState('')
+  const [vista, setVista]         = useState('critico') // 'critico' | 'agotado'
+
+  const filtrar = (lista) => casetaSel
+    ? lista.filter(s => s.casetas?.id === casetaSel)
+    : lista
+
+  const listaCritico = filtrar(stockBajo)
+  const listaAgotado = filtrar(stockCero)
+  const lista = vista === 'critico' ? listaCritico : listaAgotado
+
+  return (
+    <>
+      <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', marginBottom:10 }}>
+        <div className="stit" style={{ margin:0 }}>Stock</div>
+        {/* Toggle crítico / agotado */}
+        <div style={{ display:'flex', gap:0, background:'var(--s2)', borderRadius:'var(--rs)', padding:3 }}>
+          <button onClick={() => setVista('critico')} style={{
+            padding:'5px 14px', borderRadius:'var(--rs)', border:'none', cursor:'pointer',
+            fontFamily:"'DM Sans',sans-serif", fontWeight:600, fontSize:'.76rem',
+            background: vista==='critico' ? 'var(--gold)' : 'transparent',
+            color: vista==='critico' ? '#000' : 'var(--tx2)',
+          }}>⚠️ Crítico ({listaCritico.length})</button>
+          <button onClick={() => setVista('agotado')} style={{
+            padding:'5px 14px', borderRadius:'var(--rs)', border:'none', cursor:'pointer',
+            fontFamily:"'DM Sans',sans-serif", fontWeight:600, fontSize:'.76rem',
+            background: vista==='agotado' ? 'var(--red)' : 'transparent',
+            color: vista==='agotado' ? 'white' : 'var(--tx2)',
+          }}>❌ Agotado ({listaAgotado.length})</button>
+        </div>
+        {/* Filtro caseta */}
+        <select value={casetaSel} onChange={e => setCasetaSel(e.target.value)}
+          style={{ background:'var(--s2)', border:'1px solid var(--bd)', borderRadius:'var(--rs)', padding:'6px 10px', color:'var(--tx)', fontFamily:"'DM Sans',sans-serif", fontSize:'.8rem' }}>
+          <option value="">Todas las casetas</option>
+          {casetas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+        </select>
+      </div>
+
+      <div className="tw" style={{ marginBottom:22 }}>
         <table>
           <thead><tr><th>Producto</th><th>Caseta</th><th>Stock</th></tr></thead>
           <tbody>
-            {stats.stockBajo.length === 0
-              ? <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--tx2)', padding: 20 }}>Todo el stock está bien ✓</td></tr>
-              : stats.stockBajo.map((s, i) => (
+            {lista.length === 0
+              ? <tr><td colSpan={3} style={{ textAlign:'center', color:'var(--tx2)', padding:20 }}>
+                  {vista === 'critico' ? '✓ Sin productos en stock crítico' : '✓ Sin productos agotados'}
+                </td></tr>
+              : lista.map((s, i) => (
                 <tr key={i}>
                   <td>{s.productos?.nombre}</td>
-                  <td style={{ color: 'var(--tx2)' }}>{s.casetas?.nombre}</td>
-                  <td style={{ color: s.cantidad === 0 ? 'var(--red)' : 'var(--gold)', fontWeight: 700 }}>{s.cantidad}</td>
+                  <td style={{ color:'var(--tx2)' }}>{s.casetas?.nombre}</td>
+                  <td style={{ color: s.cantidad === 0 ? 'var(--red)' : 'var(--gold)', fontWeight:700 }}>
+                    {s.cantidad === 0 ? 'Agotado' : s.cantidad}
+                  </td>
                 </tr>
-              ))}
+              ))
+            }
           </tbody>
         </table>
       </div>
@@ -574,7 +622,7 @@ function GestionStock({ casetas }) {
     return true
   })
 
-  const colStock = n => n === 0 ? 'var(--red)' : n < 50 ? 'var(--gold)' : 'var(--green)'
+  const colStock = n => n === 0 ? 'var(--red)' : n < 10 ? 'var(--gold)' : 'var(--green)'
   if (loading && !productos.length) return <div className="loading-row"><div className="spin-sm"/>Cargando...</div>
 
   return (

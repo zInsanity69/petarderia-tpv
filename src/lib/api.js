@@ -303,13 +303,15 @@ export function toggleFavorito(productoId) {
 // ─── STATS ADMIN ─────────────────────────────────────────────
 export async function getStatsAdmin() {
   const hoy = new Date(); hoy.setHours(0,0,0,0)
-  const [ticketsRes, stockBajoRes] = await Promise.all([
+  const [ticketsRes, stockBajoRes, stockCeroRes] = await Promise.all([
     supabase.from('tickets').select('total, metodo_pago, casetas(nombre)').gte('creado_en', hoy.toISOString()),
-    supabase.from('stock').select('cantidad, productos(nombre, categoria), casetas(nombre)').lt('cantidad', 10),
+    supabase.from('stock').select('cantidad, productos(nombre, categoria), casetas(id, nombre)').gt('cantidad', 0).lt('cantidad', 10),
+    supabase.from('stock').select('cantidad, productos(nombre, categoria), casetas(id, nombre)').eq('cantidad', 0),
   ])
   return {
-    tickets:   ticketsRes.data  || [],
-    stockBajo: stockBajoRes.data || [],
+    tickets:    ticketsRes.data   || [],
+    stockBajo:  stockBajoRes.data || [],
+    stockCero:  stockCeroRes.data || [],
   }
 }
 
