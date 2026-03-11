@@ -192,14 +192,15 @@ function PanelVentas({ casetas, onVerDia }) {
                 const tot = d ? d.efectivo + d.tarjeta : 0
                 const esHoy = key === hoy.toISOString().slice(0, 10)
                 const intensidad = tot > 0 ? Math.max(0.12, tot / maxDia) : 0
-                const textoColor = tot > 0 ? '#1a0a00' : 'var(--tx2)'
-                const textoSub   = tot > 0 ? '#3a1500' : 'var(--tx2)'
+                const esMayor = tot === maxDia && tot > 0
+                const textoColor = esMayor ? 'white' : (tot > 0 ? 'var(--tx)' : 'var(--tx2)')
+                const textoSub   = esMayor ? 'rgba(255,255,255,.8)' : 'var(--tx2)'
                 return (
                   <div key={dia}
                     onClick={() => tot > 0 && onVerDia(key)}
                     style={{
                       borderRadius: 8, padding: '6px 4px', textAlign: 'center',
-                      background: tot > 0 ? `rgba(255,140,60,${intensidad})` : 'var(--s2)',
+                      background: tot > 0 ? `rgba(255,77,28,${intensidad})` : 'var(--s2)',
                       border: `2px solid ${esHoy ? 'var(--ac)' : 'transparent'}`,
                       minHeight: 54,
                       cursor: tot > 0 ? 'pointer' : 'default',

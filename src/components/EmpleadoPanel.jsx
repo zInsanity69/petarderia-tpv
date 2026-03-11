@@ -6,7 +6,7 @@ import {
   getResumenCaja, crearTicket, getTicketsTurno, deleteTicket,
   getFavoritos, toggleFavorito,
 } from '../lib/api.js'
-import { calcularPrecio, calcularTotalTicket, fmt } from '../lib/precios.js'
+import { calcularPrecio, calcularTotalTicket, detectarOfertasCombinadas, fmt } from '../lib/precios.js'
 import Scanner from './Scanner.jsx'
 
 function Toast({ msg, type }) {
@@ -798,6 +798,22 @@ export default function EmpleadoPanel({ perfil, casetas }) {
 
             <div className="tf">
               <div className="tsb"><span>Artículos</span><span>{ticket.reduce((s, i) => s + i.cantidad, 0)}</span></div>
+              {/* Ofertas combinadas aplicadas */}
+              {detectarOfertasCombinadas(ticket, ofertas).map(o => {
+                const sinOferta = (o.productos_requeridos || []).reduce((s, req) => {
+                  const item = ticket.find(i => i.id === req.producto_id)
+                  if (!item) return s
+                  const { total: t } = calcularPrecio(item.id, req.cantidad, item.precio, ofertas)
+                  return s + t
+                }, 0)
+                const ahorro = sinOferta - o.precio_pack
+                return ahorro > 0 ? (
+                  <div key={o.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'5px 0', borderTop:'1px dashed rgba(34,197,94,.3)', margin:'2px 0' }}>
+                    <span style={{ fontSize:'.72rem', color:'var(--green)', fontWeight:600 }}>🏷 {o.etiqueta}</span>
+                    <span style={{ fontSize:'.72rem', color:'var(--green)', fontWeight:700 }}>-{fmt(ahorro)}</span>
+                  </div>
+                ) : null
+              })}
               <div className="ttr">
                 <span className="ttl">TOTAL</span>
                 <span className="tta">{fmt(total)}</span>

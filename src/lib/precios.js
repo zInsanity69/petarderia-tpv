@@ -60,10 +60,28 @@ export function calcularPrecio(productoId, cantidad, precioBase, ofertas) {
 }
 
 export function calcularTotalTicket(items, ofertas) {
-  return redondear(items.reduce((sum, item) => {
+  // Primero sumar precios normales/pack por producto
+  let total = redondear(items.reduce((sum, item) => {
     const { total } = calcularPrecio(item.id, item.cantidad, item.precio, ofertas)
     return sum + total
   }, 0))
+
+  // Luego aplicar descuentos de ofertas combinadas
+  // Una oferta combinada sustituye la suma de precios normales por su precio_pack
+  const combinadasAplicadas = detectarOfertasCombinadas(items, ofertas)
+  for (const oferta of combinadasAplicadas) {
+    // Calcular lo que costarían esos productos sin la oferta combinada
+    const sinOferta = (oferta.productos_requeridos || []).reduce((s, req) => {
+      const item = items.find(i => i.id === req.producto_id)
+      if (!item) return s
+      const { total: t } = calcularPrecio(item.id, req.cantidad, item.precio, ofertas)
+      return s + t
+    }, 0)
+    // Aplicar descuento: precio_pack - lo que ya costaría
+    total = redondear(total - sinOferta + oferta.precio_pack)
+  }
+
+  return total
 }
 
 // Detecta ofertas combinadas que aplican al ticket actual
