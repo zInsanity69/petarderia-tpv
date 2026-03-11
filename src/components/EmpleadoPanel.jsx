@@ -25,6 +25,42 @@ function Toast({ msg, type }) {
   return <div className="twrap"><div className={`toast ${type === 'error' ? 'te2' : 'tok'}`}>{msg}</div></div>
 }
 
+// Hook long press — funciona en móvil (touch) y escritorio (mouse)
+// tap rápido → onTap / pulsación larga → onLong
+function useLongPress(onTap, onLong, ms = 500) {
+  const timer = useRef(null)
+  const fired = useRef(false)
+
+  const start = (e) => {
+    // Ignorar si el click es sobre un botón hijo (ej. estrella favorito)
+    if (e.target.tagName === 'BUTTON') return
+    fired.current = false
+    timer.current = setTimeout(() => {
+      fired.current = true
+      onLong()
+    }, ms)
+  }
+
+  const cancel = () => {
+    clearTimeout(timer.current)
+  }
+
+  const end = (e) => {
+    if (e.target.tagName === 'BUTTON') return
+    clearTimeout(timer.current)
+    if (!fired.current) onTap()
+  }
+
+  return {
+    onMouseDown:  start,
+    onMouseUp:    end,
+    onMouseLeave: cancel,
+    onTouchStart: start,
+    onTouchEnd:   end,
+    onContextMenu: (e) => e.preventDefault(), // evitar menú nativo en móvil al pulsar largo
+  }
+}
+
 // ─── TICKET ITEM ─────────────────────────────────────────────
 function TicketItem({ item, ofertas, onQty, onDel }) {
   const [open, setOpen] = useState(false)
@@ -370,7 +406,30 @@ function ModalHistorial({ cajaId, perfil, onClose }) {
   )
 }
 
-// ─── EMPLEADO PANEL ───────────────────────────────────────────
+// ─── TARJETA PRODUCTO ────────────────────────────────────────
+function TarjetaProducto({ p, stockDisp, enT, tieneOferta, esFav, onTap, onLong, onFav, eaBadge }) {
+  const lp = useLongPress(onTap, onLong)
+  return (
+    <div
+      className="pc"
+      {...lp}
+      style={{ opacity: stockDisp === 0 ? .4 : 1, outline: enT ? '2px solid var(--ac)' : 'none', userSelect: 'none' }}
+    >
+      {eaBadge(p)}
+      <button onClick={e => onFav(e, p.id)} style={{
+        position: 'absolute', top: 6, left: 6, background: 'transparent', border: 'none',
+        cursor: 'pointer', fontSize: '.8rem', opacity: esFav ? 1 : .25, padding: 0, lineHeight: 1,
+      }}>⭐</button>
+      <div className="pn" style={{ paddingLeft: 14 }}>{p.nombre}</div>
+      <div className="pp2">{fmt(p.precio)}</div>
+      <div className="pst">
+        {stockDisp === 0 ? 'Agotado' : `Stock: ${stockDisp}`}
+        {enT && <span style={{ color: 'var(--green)' }}> · {enT.cantidad}</span>}
+      </div>
+      {tieneOferta && <span className="ocbadge">OFERTA</span>}
+    </div>
+  )
+}
 export default function EmpleadoPanel({ perfil, casetas }) {
   const caseta = casetas.find(c => c.id === perfil.caseta_id)
 
@@ -646,26 +705,15 @@ export default function EmpleadoPanel({ perfil, casetas }) {
                 const tieneOferta = ofertas.some(o => o.producto_id === p.id)
                 const esFav = favoritos.includes(p.id)
                 return (
-                  <div
-                    key={p.id} className="pc"
-                    onClick={() => agregar(p)}
-                    onContextMenu={e => { e.preventDefault(); abrirModalCantidad(p) }}
-                    style={{ opacity: stockDisp === 0 ? .4 : 1, outline: enT ? '2px solid var(--ac)' : 'none' }}
-                  >
-                    {eaBadge(p)}
-                    {/* Estrella favorito */}
-                    <button onClick={e => handleToggleFav(e, p.id)} style={{
-                      position: 'absolute', top: 6, left: 6, background: 'transparent', border: 'none',
-                      cursor: 'pointer', fontSize: '.8rem', opacity: esFav ? 1 : .25, padding: 0, lineHeight: 1,
-                    }}>⭐</button>
-                    <div className="pn" style={{ paddingLeft: 14 }}>{p.nombre}</div>
-                    <div className="pp2">{fmt(p.precio)}</div>
-                    <div className="pst">
-                      {stockDisp === 0 ? 'Agotado' : `Stock: ${stockDisp}`}
-                      {enT && <span style={{ color: 'var(--green)' }}> · {enT.cantidad}</span>}
-                    </div>
-                    {tieneOferta && <span className="ocbadge">OFERTA</span>}
-                  </div>
+                  <TarjetaProducto
+                    key={p.id} p={p}
+                    stockDisp={stockDisp} enT={enT}
+                    tieneOferta={tieneOferta} esFav={esFav}
+                    onTap={() => agregar(p)}
+                    onLong={() => abrirModalCantidad(p)}
+                    onFav={handleToggleFav}
+                    eaBadge={eaBadge}
+                  />
                 )
               })}
               {tabTPV === 'favoritos' && favoritos.length === 0 && (
@@ -709,7 +757,7 @@ export default function EmpleadoPanel({ perfil, casetas }) {
 
         {/* Ayuda gestos */}
         <div style={{ fontSize: '.68rem', color: 'var(--tx2)', textAlign: 'center', marginTop: 8, opacity: .6 }}>
-          Click = +1 unidad · Click derecho / mantener pulsado = selector de cantidad · ⭐ = añadir a favoritos
+          Pulsa = +1 unidad · Mantén pulsado = selector de cantidad · ⭐ = favorito
         </div>
       </div>
 
