@@ -120,7 +120,7 @@ function Dashboard({ casetas }) {
 }
 
 // ─── PANEL VENTAS ────────────────────────────────────────────
-function PanelVentas({ casetas }) {
+function PanelVentas({ casetas, onVerDia }) {
   const hoy     = new Date()
   const [año,   setAño]     = useState(hoy.getFullYear())
   const [mes,   setMes]     = useState(hoy.getMonth() + 1)
@@ -193,12 +193,19 @@ function PanelVentas({ casetas }) {
                 const esHoy = key === hoy.toISOString().slice(0, 10)
                 const intensidad = tot > 0 ? Math.max(0.12, tot / maxDia) : 0
                 return (
-                  <div key={dia} style={{
-                    borderRadius: 8, padding: '6px 4px', textAlign: 'center',
-                    background: tot > 0 ? `rgba(255,77,28,${intensidad})` : 'var(--s2)',
-                    border: `1px solid ${esHoy ? 'var(--ac)' : 'transparent'}`,
-                    minHeight: 54,
-                  }}>
+                  <div key={dia}
+                    onClick={() => tot > 0 && onVerDia(key)}
+                    style={{
+                      borderRadius: 8, padding: '6px 4px', textAlign: 'center',
+                      background: tot > 0 ? `rgba(255,77,28,${intensidad})` : 'var(--s2)',
+                      border: `2px solid ${esHoy ? 'var(--ac)' : 'transparent'}`,
+                      minHeight: 54,
+                      cursor: tot > 0 ? 'pointer' : 'default',
+                      transition: 'filter .15s',
+                    }}
+                    onMouseEnter={e => { if (tot > 0) e.currentTarget.style.filter = 'brightness(1.25)' }}
+                    onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
+                  >
                     <div style={{ fontSize: '.7rem', color: tot > 0 ? 'var(--tx)' : 'var(--tx2)', fontWeight: 700 }}>{dia}</div>
                     {tot > 0 && (
                       <>
@@ -223,8 +230,11 @@ function PanelVentas({ casetas }) {
             {Object.entries(datos).length === 0
               ? <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--tx2)', padding: 20 }}>Sin ventas este mes</td></tr>
               : Object.entries(datos).sort((a,b) => b[0].localeCompare(a[0])).map(([dia, d]) => (
-                <tr key={dia}>
-                  <td style={{ fontWeight: 600 }}>{new Date(dia + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })}</td>
+                <tr key={dia} onClick={() => onVerDia(dia)}
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--s2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  <td style={{ fontWeight: 600 }}>{new Date(dia + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })} <span style={{fontSize:'.68rem',color:'var(--tx2)'}}>→ ver tickets</span></td>
                   <td style={{ color: 'var(--tx2)' }}>{d.tickets}</td>
                   <td style={{ color: 'var(--green)' }}>{fmt(d.efectivo)}</td>
                   <td style={{ color: 'var(--blue)' }}>{fmt(d.tarjeta)}</td>
@@ -239,10 +249,10 @@ function PanelVentas({ casetas }) {
 }
 
 // ─── PANEL TICKETS ────────────────────────────────────────────
-function PanelTickets({ casetas }) {
+function PanelTickets({ casetas, filtroInicial }) {
   const hoy = new Date(); hoy.setHours(0,0,0,0)
-  const [desde, setDesde]       = useState(hoy.toISOString().slice(0,10))
-  const [hasta, setHasta]       = useState(new Date().toISOString().slice(0,10))
+  const [desde, setDesde]       = useState(filtroInicial?.desde || hoy.toISOString().slice(0,10))
+  const [hasta, setHasta]       = useState(filtroInicial?.hasta || new Date().toISOString().slice(0,10))
   const [casetaSel, setCasetaSel] = useState('')
   const [tickets, setTickets]   = useState([])
   const [loading, setLoading]   = useState(false)
@@ -251,13 +261,10 @@ function PanelTickets({ casetas }) {
 
   const showToast = (msg, type='ok') => { setToast({msg,type}); setTimeout(()=>setToast(null),2500) }
 
-  const buscar = () => {
+  const buscar = (d = desde, h = hasta, c = casetaSel) => {
     setLoading(true)
-    getTicketsAdmin(
-      desde + 'T00:00:00',
-      hasta + 'T23:59:59',
-      casetaSel || null
-    ).then(setTickets).finally(() => setLoading(false))
+    getTicketsAdmin(d + 'T00:00:00', h + 'T23:59:59', c || null)
+      .then(setTickets).finally(() => setLoading(false))
   }
 
   useEffect(() => { buscar() }, [])
@@ -295,7 +302,7 @@ function PanelTickets({ casetas }) {
             {casetas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
         </div>
-        <button className="btn-add" onClick={buscar} style={{ height: 38 }}>Buscar</button>
+        <button className="btn-add" onClick={() => buscar()} style={{ height: 38 }}>Buscar</button>
       </div>
 
       <div style={{ marginBottom: 14, fontSize: '.82rem', color: 'var(--tx2)' }}>
@@ -640,8 +647,15 @@ function GestionOfertas() {
   const [loading, setLoading]     = useState(true)
   const [toast, setToast]         = useState(null)
   const [editId, setEditId]       = useState(null)
-  const F0 = { producto_id:'', etiqueta:'', cantidad_pack:'', precio_pack:'' }
-  const [form, setForm]           = useState(F0)
+  const [tipo, setTipo]           = useState('pack') // 'pack' | 'combinada'
+
+  // Formulario pack
+  const F0pack = { producto_id:'', etiqueta:'', cantidad_pack:'', precio_pack:'' }
+  const [formPack, setFormPack] = useState(F0pack)
+
+  // Formulario combinada: lista de líneas {producto_id, cantidad}
+  const F0comb = { etiqueta:'', precio_pack:'', lineas:[{producto_id:'', cantidad:'1'},{producto_id:'', cantidad:'1'}] }
+  const [formComb, setFormComb] = useState(F0comb)
 
   const showToast = (msg,type='ok') => { setToast({msg,type}); setTimeout(()=>setToast(null),3000) }
 
@@ -649,28 +663,58 @@ function GestionOfertas() {
     Promise.all([getOfertas(),getProductos()]).then(([o,p])=>{setOfertas(o);setProductos(p)}).finally(()=>setLoading(false))
   },[])
 
-  const precioU = () => (form.cantidad_pack&&form.precio_pack) ? parseFloat(form.precio_pack)/parseInt(form.cantidad_pack) : 0
-  const prodSel = productos.find(p=>p.id===form.producto_id)
-
-  const guardar = async () => {
-    if (!form.producto_id||!form.etiqueta||!form.cantidad_pack||!form.precio_pack) {
-      showToast('Todos los campos son obligatorios','error'); return
-    }
+  // ── Guardar pack ──
+  const guardarPack = async () => {
+    const {producto_id,etiqueta,cantidad_pack,precio_pack} = formPack
+    if (!producto_id||!etiqueta||!cantidad_pack||!precio_pack) { showToast('Todos los campos son obligatorios','error'); return }
     try {
       const data = await upsertOferta({
         ...(editId?{id:editId}:{}),
-        producto_id:form.producto_id, etiqueta:form.etiqueta,
-        cantidad_pack:parseInt(form.cantidad_pack), precio_pack:parseFloat(form.precio_pack), activa:true,
+        tipo:'pack', producto_id, etiqueta,
+        cantidad_pack:parseInt(cantidad_pack), precio_pack:parseFloat(precio_pack), activa:true,
       })
-      if (editId) { setOfertas(prev=>prev.map(o=>o.id===editId?data:o)); showToast('Oferta actualizada ✓') }
-      else { setOfertas(prev=>[...prev,data]); showToast('Oferta añadida ✓') }
-      setForm(F0); setEditId(null)
+      if (editId) setOfertas(prev=>prev.map(o=>o.id===editId?data:o))
+      else setOfertas(prev=>[...prev,data])
+      showToast(editId?'Oferta actualizada ✓':'Oferta añadida ✓')
+      setFormPack(F0pack); setEditId(null)
+    } catch(e) { showToast(e.message,'error') }
+  }
+
+  // ── Guardar combinada ──
+  const guardarCombinada = async () => {
+    const {etiqueta,precio_pack,lineas} = formComb
+    if (!etiqueta||!precio_pack) { showToast('Etiqueta y precio son obligatorios','error'); return }
+    const lineasVal = lineas.filter(l=>l.producto_id&&parseInt(l.cantidad)>0)
+    if (lineasVal.length < 2) { showToast('Una oferta combinada necesita al menos 2 productos','error'); return }
+    const productos_requeridos = lineasVal.map(l=>({
+      producto_id: l.producto_id,
+      cantidad: parseInt(l.cantidad),
+      nombre: productos.find(p=>p.id===l.producto_id)?.nombre||'',
+    }))
+    try {
+      const data = await upsertOferta({
+        ...(editId?{id:editId}:{}),
+        tipo:'combinada', producto_id:null, etiqueta,
+        cantidad_pack:lineasVal.reduce((s,l)=>s+parseInt(l.cantidad),0),
+        precio_pack:parseFloat(precio_pack),
+        productos_requeridos, activa:true,
+      })
+      if (editId) setOfertas(prev=>prev.map(o=>o.id===editId?data:o))
+      else setOfertas(prev=>[...prev,data])
+      showToast(editId?'Oferta actualizada ✓':'Oferta combinada añadida ✓')
+      setFormComb(F0comb); setEditId(null)
     } catch(e) { showToast(e.message,'error') }
   }
 
   const editar = o => {
-    setForm({producto_id:o.producto_id,etiqueta:o.etiqueta,cantidad_pack:String(o.cantidad_pack),precio_pack:String(o.precio_pack)})
     setEditId(o.id)
+    if (!o.tipo || o.tipo==='pack') {
+      setTipo('pack')
+      setFormPack({producto_id:o.producto_id||'',etiqueta:o.etiqueta,cantidad_pack:String(o.cantidad_pack),precio_pack:String(o.precio_pack)})
+    } else {
+      setTipo('combinada')
+      setFormComb({etiqueta:o.etiqueta,precio_pack:String(o.precio_pack),lineas:(o.productos_requeridos||[]).map(r=>({producto_id:r.producto_id,cantidad:String(r.cantidad)}))})
+    }
   }
 
   const eliminar = async id => {
@@ -680,58 +724,125 @@ function GestionOfertas() {
     showToast('Oferta eliminada')
   }
 
+  const addLinea = () => setFormComb(prev=>({...prev,lineas:[...prev.lineas,{producto_id:'',cantidad:'1'}]}))
+  const removeLinea = i => setFormComb(prev=>({...prev,lineas:prev.lineas.filter((_,j)=>j!==i)}))
+  const setLinea = (i,campo,val) => setFormComb(prev=>({...prev,lineas:prev.lineas.map((l,j)=>j===i?{...l,[campo]:val}:l)}))
+
+  const prodSel = productos.find(p=>p.id===formPack.producto_id)
+  const precioU = formPack.cantidad_pack&&formPack.precio_pack ? parseFloat(formPack.precio_pack)/parseInt(formPack.cantidad_pack) : 0
+
   if (loading) return <div className="loading-row"><div className="spin-sm"/>Cargando...</div>
 
   return (
     <>
       {toast && <Toast msg={toast.msg} type={toast.type} />}
       <div className="stit">{editId?'✏️ Editar Oferta':'➕ Nueva Oferta'}</div>
-      <div className="info-box">
-        <strong style={{color:'var(--gold)'}}>Cómo funcionan:</strong> Pack de N unidades por X€. Si el cliente compra más de un pack se aplican automáticamente. El resto va a precio normal.
-      </div>
-      <div className="iform">
-        <div className="frow">
-          <div className="fg"><label>Producto</label>
-            <select value={form.producto_id} onChange={e=>setForm({...form,producto_id:e.target.value})}>
-              <option value="">-- Seleccionar --</option>
-              {productos.filter(p=>p.activo).map(p=><option key={p.id} value={p.id}>{p.nombre} ({fmt(p.precio)})</option>)}
-            </select>
-          </div>
-          <div className="fg"><label>Etiqueta</label><input value={form.etiqueta} onChange={e=>setForm({...form,etiqueta:e.target.value})} placeholder="Ej: 4 x 5€" /></div>
-          <div className="fg"><label>Unidades del pack</label><input type="number" value={form.cantidad_pack} onChange={e=>setForm({...form,cantidad_pack:e.target.value})} placeholder="4" min="2" /></div>
-          <div className="fg"><label>Precio total (€)</label><input type="number" value={form.precio_pack} onChange={e=>setForm({...form,precio_pack:e.target.value})} placeholder="5.00" min="0" step=".01" /></div>
+
+      {/* Selector tipo */}
+      {!editId && (
+        <div style={{display:'flex',gap:0,marginBottom:14,background:'var(--s2)',borderRadius:'var(--rs)',padding:4,width:'fit-content'}}>
+          <button onClick={()=>setTipo('pack')} style={{padding:'7px 18px',borderRadius:'var(--rs)',border:'none',fontFamily:"'DM Sans',sans-serif",fontWeight:600,fontSize:'.82rem',cursor:'pointer',background:tipo==='pack'?'var(--ac)':'transparent',color:tipo==='pack'?'white':'var(--tx2)'}}>
+            📦 Pack (un producto)
+          </button>
+          <button onClick={()=>setTipo('combinada')} style={{padding:'7px 18px',borderRadius:'var(--rs)',border:'none',fontFamily:"'DM Sans',sans-serif",fontWeight:600,fontSize:'.82rem',cursor:'pointer',background:tipo==='combinada'?'var(--ac)':'transparent',color:tipo==='combinada'?'white':'var(--tx2)'}}>
+            🎁 Combinada (varios productos)
+          </button>
         </div>
-        {form.cantidad_pack&&form.precio_pack&&(
-          <div style={{fontSize:'.8rem',marginBottom:11,display:'flex',gap:18,flexWrap:'wrap'}}>
-            <span style={{color:'var(--gold)'}}>€/u. con oferta: <strong>{fmt(precioU())}</strong></span>
-            {prodSel&&<span style={{color:'var(--green)'}}>Ahorro: <strong>{fmt(prodSel.precio-precioU())}/u.</strong></span>}
+      )}
+
+      {/* Formulario pack */}
+      {tipo==='pack' && (
+        <div className="iform">
+          <div className="info-box" style={{marginBottom:12}}>
+            Pack de N unidades del mismo producto por X€. Se aplica automáticamente al añadir al ticket.
           </div>
-        )}
-        <div style={{display:'flex',gap:9}}>
-          <button className="btn-add" onClick={guardar}>{editId?'Guardar':'Añadir oferta'}</button>
-          {editId&&<button className="btn-s" style={{width:'auto',marginTop:0}} onClick={()=>{setEditId(null);setForm(F0)}}>Cancelar</button>}
+          <div className="frow">
+            <div className="fg"><label>Producto</label>
+              <select value={formPack.producto_id} onChange={e=>setFormPack({...formPack,producto_id:e.target.value})}>
+                <option value="">-- Seleccionar --</option>
+                {productos.filter(p=>p.activo).map(p=><option key={p.id} value={p.id}>{p.nombre} ({fmt(p.precio)})</option>)}
+              </select>
+            </div>
+            <div className="fg"><label>Etiqueta visible</label><input value={formPack.etiqueta} onChange={e=>setFormPack({...formPack,etiqueta:e.target.value})} placeholder="Ej: 4 x 5€" /></div>
+            <div className="fg"><label>Unidades del pack</label><input type="number" value={formPack.cantidad_pack} onChange={e=>setFormPack({...formPack,cantidad_pack:e.target.value})} placeholder="4" min="2" /></div>
+            <div className="fg"><label>Precio total (€)</label><input type="number" value={formPack.precio_pack} onChange={e=>setFormPack({...formPack,precio_pack:e.target.value})} placeholder="5.00" min="0" step=".01" /></div>
+          </div>
+          {formPack.cantidad_pack&&formPack.precio_pack&&(
+            <div style={{fontSize:'.8rem',marginBottom:11,display:'flex',gap:18}}>
+              <span style={{color:'var(--gold)'}}>€/u.: <strong>{fmt(precioU)}</strong></span>
+              {prodSel&&<span style={{color:'var(--green)'}}>Ahorro: <strong>{fmt(prodSel.precio-precioU)}/u.</strong></span>}
+            </div>
+          )}
+          <div style={{display:'flex',gap:9}}>
+            <button className="btn-add" onClick={guardarPack}>{editId?'Guardar':'Añadir oferta'}</button>
+            {editId&&<button className="btn-s" style={{width:'auto',marginTop:0}} onClick={()=>{setEditId(null);setFormPack(F0pack)}}>Cancelar</button>}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Formulario combinada */}
+      {tipo==='combinada' && (
+        <div className="iform">
+          <div className="info-box" style={{marginBottom:12}}>
+            Oferta con varios productos distintos. Aparecerá como botón en el TPV: al pulsarlo añade todos los productos al ticket de golpe.
+          </div>
+          <div className="frow">
+            <div className="fg"><label>Etiqueta visible</label><input value={formComb.etiqueta} onChange={e=>setFormComb({...formComb,etiqueta:e.target.value})} placeholder="Ej: Mini fuente + Cracker 5€" /></div>
+            <div className="fg"><label>Precio total (€)</label><input type="number" value={formComb.precio_pack} onChange={e=>setFormComb({...formComb,precio_pack:e.target.value})} placeholder="5.00" min="0" step=".01" /></div>
+          </div>
+
+          <div style={{marginBottom:12}}>
+            <div style={{fontSize:'.73rem',color:'var(--tx2)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>Productos incluidos</div>
+            {formComb.lineas.map((l,i)=>(
+              <div key={i} style={{display:'flex',gap:8,alignItems:'center',marginBottom:8}}>
+                <select value={l.producto_id} onChange={e=>setLinea(i,'producto_id',e.target.value)}
+                  style={{flex:2,background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'8px 10px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif"}}>
+                  <option value="">-- Producto --</option>
+                  {productos.filter(p=>p.activo).map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+                <div style={{display:'flex',alignItems:'center',gap:6,flex:1}}>
+                  <label style={{fontSize:'.75rem',color:'var(--tx2)',whiteSpace:'nowrap'}}>Cant.</label>
+                  <input type="number" min="1" value={l.cantidad} onChange={e=>setLinea(i,'cantidad',e.target.value)}
+                    style={{width:60,background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'8px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif",textAlign:'center'}}
+                    inputMode="numeric" />
+                </div>
+                {formComb.lineas.length>2&&(
+                  <button onClick={()=>removeLinea(i)} style={{width:28,height:28,borderRadius:'50%',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.1)',color:'var(--red)',cursor:'pointer',fontSize:'.85rem',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+                )}
+              </div>
+            ))}
+            <button onClick={addLinea} style={{background:'transparent',border:'1px dashed var(--bd)',borderRadius:'var(--rs)',padding:'6px 14px',color:'var(--tx2)',cursor:'pointer',fontSize:'.78rem',fontFamily:"'DM Sans',sans-serif"}}>
+              + Añadir otro producto
+            </button>
+          </div>
+
+          <div style={{display:'flex',gap:9}}>
+            <button className="btn-add" onClick={guardarCombinada}>{editId?'Guardar':'Añadir oferta combinada'}</button>
+            {editId&&<button className="btn-s" style={{width:'auto',marginTop:0}} onClick={()=>{setEditId(null);setFormComb(F0comb)}}>Cancelar</button>}
+          </div>
+        </div>
+      )}
 
       <div className="stit">Ofertas activas ({ofertas.length})</div>
       <div className="tw">
         <table>
-          <thead><tr><th>Producto</th><th>Pack</th><th>Precio pack</th><th>€/u.</th><th>Normal</th><th>Ahorro</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>Tipo</th><th>Descripción</th><th>Precio</th><th>Acciones</th></tr></thead>
           <tbody>
             {ofertas.length===0
-              ? <tr><td colSpan={7} style={{textAlign:'center',color:'var(--tx2)',padding:24}}>Sin ofertas</td></tr>
+              ? <tr><td colSpan={4} style={{textAlign:'center',color:'var(--tx2)',padding:24}}>Sin ofertas</td></tr>
               : ofertas.map(o=>{
-                const p=productos.find(x=>x.id===o.producto_id)
-                const pu=o.precio_pack/o.cantidad_pack
-                const ahorro=p?p.precio-pu:0
+                const esComb = o.tipo==='combinada'
+                const p = !esComb && productos.find(x=>x.id===o.producto_id)
                 return (
                   <tr key={o.id}>
-                    <td style={{fontWeight:600}}>{p?p.nombre:<span style={{color:'var(--red)'}}>Eliminado</span>}</td>
-                    <td><span className="chip cy">{o.etiqueta}</span></td>
+                    <td><span className={`chip ${esComb?'cb2':'cy'}`}>{esComb?'Combinada':'Pack'}</span></td>
+                    <td style={{fontWeight:600}}>
+                      {esComb
+                        ? <>{o.etiqueta}<br/><span style={{fontWeight:400,fontSize:'.74rem',color:'var(--tx2)'}}>{(o.productos_requeridos||[]).map(r=>`${r.cantidad}× ${r.nombre}`).join(' + ')}</span></>
+                        : <>{p?p.nombre:<span style={{color:'var(--red)'}}>Eliminado</span>}<br/><span style={{fontWeight:400,fontSize:'.74rem',color:'var(--tx2)'}}>{o.etiqueta} · {o.cantidad_pack}u.</span></>
+                      }
+                    </td>
                     <td style={{color:'var(--ac)',fontWeight:700}}>{fmt(o.precio_pack)}</td>
-                    <td style={{color:'var(--gold)',fontWeight:700}}>{fmt(pu)}</td>
-                    <td style={{color:'var(--tx2)'}}>{p?fmt(p.precio):'—'}</td>
-                    <td style={{color:ahorro>0?'var(--green)':'var(--red)',fontWeight:700}}>{ahorro>0?`-${fmt(ahorro)}`:'—'}</td>
                     <td><div className="acell">
                       <button className="btn-edit" onClick={()=>editar(o)}>Editar</button>
                       <button className="btn-del" onClick={()=>eliminar(o.id)}>Eliminar</button>
@@ -927,8 +1038,14 @@ function GestionUsuarios({ casetas }) {
 
 // ─── ADMIN PANEL ─────────────────────────────────────────────
 export default function AdminPanel({ perfil, casetas: casetasInit }) {
-  const [tab, setTab]       = useState('dashboard')
-  const [casetas, setCasetas] = useState(casetasInit)
+  const [tab, setTab]           = useState('dashboard')
+  const [casetas, setCasetas]   = useState(casetasInit)
+  const [ticketFiltro, setTicketFiltro] = useState(null) // { desde, hasta } al navegar desde ventas
+
+  const irATickets = (dia) => {
+    setTicketFiltro({ desde: dia, hasta: dia })
+    setTab('tickets')
+  }
 
   return (
     <div className="app">
@@ -947,8 +1064,8 @@ export default function AdminPanel({ perfil, casetas: casetasInit }) {
       </div>
       <div className="cnt">
         {tab==='dashboard' && <Dashboard casetas={casetas} />}
-        {tab==='ventas'    && <PanelVentas casetas={casetas} />}
-        {tab==='tickets'   && <PanelTickets casetas={casetas} />}
+        {tab==='ventas'    && <PanelVentas casetas={casetas} onVerDia={irATickets} />}
+        {tab==='tickets'   && <PanelTickets casetas={casetas} filtroInicial={ticketFiltro} />}
         {tab==='productos' && <GestionProductos />}
         {tab==='stock'     && <GestionStock casetas={casetas} />}
         {tab==='ofertas'   && <GestionOfertas />}

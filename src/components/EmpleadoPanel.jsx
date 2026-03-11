@@ -727,28 +727,63 @@ export default function EmpleadoPanel({ perfil, casetas }) {
               }
             </div>
 
-            {/* Ofertas rápidas — productos con oferta para añadir directo */}
+            {/* Ofertas rápidas */}
             {ofertas.length > 0 && (
               <div style={{ borderTop: '1px solid var(--bd)', padding: '8px 10px' }}>
                 <div style={{ fontSize: '.65rem', color: 'var(--tx2)', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 5 }}>
-                  🏷 Añadir con oferta
+                  🏷 Ofertas rápidas
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {[...new Map(ofertas.map(o => [o.producto_id, o])).values()].map(o => {
+                  {/* Ofertas combinadas — añaden varios productos de golpe */}
+                  {ofertas.filter(o => o.tipo === 'combinada').map(o => {
+                    const sinStock = (o.productos_requeridos || []).some(r => (stock[r.producto_id] ?? 0) < r.cantidad)
+                    return (
+                      <button key={o.id}
+                        disabled={sinStock}
+                        onClick={() => {
+                          if (sinStock) return
+                          ;(o.productos_requeridos || []).forEach(r => {
+                            const prod = productos.find(p => p.id === r.producto_id)
+                            if (prod) agregar(prod, r.cantidad)
+                          })
+                          showToast(`✓ ${o.etiqueta} añadida al ticket`)
+                        }}
+                        style={{
+                          padding: '6px 11px', borderRadius: 20,
+                          border: '1px solid rgba(96,165,250,.35)',
+                          background: 'rgba(96,165,250,.08)',
+                          color: sinStock ? 'var(--tx2)' : 'var(--blue)',
+                          fontSize: '.72rem', fontWeight: 600,
+                          cursor: sinStock ? 'not-allowed' : 'pointer',
+                          fontFamily: "'DM Sans',sans-serif",
+                          opacity: sinStock ? .4 : 1,
+                        }}
+                      >
+                        🎁 {o.etiqueta} · {fmt(o.precio_pack)}
+                      </button>
+                    )
+                  })}
+                  {/* Packs — abren selector de cantidad */}
+                  {[...new Map(ofertas.filter(o => !o.tipo || o.tipo === 'pack').map(o => [o.producto_id, o])).values()].map(o => {
                     const prod = productos.find(p => p.id === o.producto_id)
                     if (!prod) return null
                     const stockDisp = stock[prod.id] ?? 0
                     return (
-                      <button key={o.producto_id} onClick={() => abrirModalCantidad(prod)}
+                      <button key={o.producto_id}
+                        onClick={() => abrirModalCantidad(prod)}
                         disabled={stockDisp === 0}
                         style={{
-                          padding: '5px 9px', borderRadius: 20, border: '1px solid rgba(245,200,66,.35)',
-                          background: 'rgba(245,200,66,.07)', color: stockDisp === 0 ? 'var(--tx2)' : 'var(--gold)',
-                          fontSize: '.7rem', fontWeight: 600, cursor: stockDisp === 0 ? 'not-allowed' : 'pointer',
-                          fontFamily: "'DM Sans',sans-serif", opacity: stockDisp === 0 ? .4 : 1,
+                          padding: '6px 11px', borderRadius: 20,
+                          border: '1px solid rgba(245,200,66,.35)',
+                          background: 'rgba(245,200,66,.07)',
+                          color: stockDisp === 0 ? 'var(--tx2)' : 'var(--gold)',
+                          fontSize: '.72rem', fontWeight: 600,
+                          cursor: stockDisp === 0 ? 'not-allowed' : 'pointer',
+                          fontFamily: "'DM Sans',sans-serif",
+                          opacity: stockDisp === 0 ? .4 : 1,
                         }}
                       >
-                        {prod.nombre.length > 18 ? prod.nombre.slice(0, 16) + '…' : prod.nombre}
+                        📦 {prod.nombre.length > 16 ? prod.nombre.slice(0,14)+'…' : prod.nombre}
                       </button>
                     )
                   })}
