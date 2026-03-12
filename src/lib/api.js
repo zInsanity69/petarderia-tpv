@@ -303,15 +303,37 @@ export function toggleFavorito(productoId) {
 // ─── STATS ADMIN ─────────────────────────────────────────────
 export async function getStatsAdmin() {
   const hoy = new Date(); hoy.setHours(0,0,0,0)
-  const [ticketsRes, stockBajoRes, stockCeroRes] = await Promise.all([
+  const [ticketsRes, stockBajoRes, stockCeroRes, productosRes, casetasRes] = await Promise.all([
     supabase.from('tickets').select('total, metodo_pago, casetas(nombre)').gte('creado_en', hoy.toISOString()),
-    supabase.from('stock').select('cantidad, productos(nombre, categoria), casetas(id, nombre)').gt('cantidad', 0).lt('cantidad', 10),
+    supabase.from('stock').select('cantidad, productos(nombre, categoria), casetas(id, nombre)').gt('cantidad', 0).lt('cantidad', 20),
     supabase.from('stock').select('cantidad, productos(nombre, categoria), casetas(id, nombre)').eq('cantidad', 0),
+    supabase.from('productos').select('id, nombre, categoria').eq('activo', true),
+    supabase.from('casetas').select('id, nombre').eq('activa', true),
   ])
+
+  // Detectar combinaciones producto+caseta que no tienen fila de stock (= implícitamente agotado)
+  const stockExistente = new Set([
+    ...(stockBajoRes.data || []).map(s => `${s.productos?.nombre}__${s.casetas?.id}`),
+    ...(stockCeroRes.data || []).map(s => `${s.productos?.nombre}__${s.casetas?.id}`),
+  ])
+  // Para esto necesitamos el stock completo para saber qué combinaciones faltan
+  const { data: stockTodo } = await supabase.from('stock').select('producto_id, caseta_id')
+  const stockSet = new Set((stockTodo || []).map(s => `${s.producto_id}__${s.caseta_id}`))
+  const casetas = casetasRes.data || []
+  const productos = productosRes.data || []
+  const sinFila = []
+  for (const p of productos) {
+    for (const c of casetas) {
+      if (!stockSet.has(`${p.id}__${c.id}`)) {
+        sinFila.push({ cantidad: 0, productos: { nombre: p.nombre, categoria: p.categoria }, casetas: { id: c.id, nombre: c.nombre } })
+      }
+    }
+  }
+
   return {
     tickets:    ticketsRes.data   || [],
     stockBajo:  stockBajoRes.data || [],
-    stockCero:  stockCeroRes.data || [],
+    stockCero:  [...(stockCeroRes.data || []), ...sinFila],
   }
 }
 
