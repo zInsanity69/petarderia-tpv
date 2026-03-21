@@ -9,6 +9,7 @@ import {
   setStock, getStockCaseta,
   getVentasPorDia,
   getPedidos, updatePedido, updatePedidoItems,
+  getFichajesAdmin, editarFichaje, deleteFichaje, calcularTurnos, calcularEstado, fmtDuracion,
   getInventarios, confirmarInventario,
   getKgPolvora,
 } from '../lib/api.js'
@@ -20,12 +21,29 @@ const TABS = [
   ['tickets',     '🧾 Tickets'],
   ['pedidos',     '📦 Pedidos'],
   ['inventarios', '📋 Inventarios'],
+  ['fichajes',    '⏱ Fichajes'],
   ['productos',   '🛍 Productos'],
   ['stock',       '📋 Stock'],
   ['ofertas',     '🏷 Ofertas'],
   ['casetas',     '🏪 Casetas'],
   ['usuarios',    '👥 Usuarios'],
 ]
+
+// ─── SCROLL HORIZONTAL CON RUEDA ─────────────────────────────
+function useWheelScroll() {
+  const ref = useRef(null)
+  useEffect(() => {
+    const el = ref.current; if (!el) return
+    const h = (e) => { if (e.deltaY === 0) return; e.preventDefault(); el.scrollLeft += e.deltaY }
+    el.addEventListener('wheel', h, { passive: false })
+    return () => el.removeEventListener('wheel', h)
+  }, [])
+  return ref
+}
+function WheelScrollDiv({ children, className, style }) {
+  const ref = useWheelScroll()
+  return <div ref={ref} className={className} style={style}>{children}</div>
+}
 
 function Toast({ msg, type }) {
   return <div className="twrap"><div className={`toast ${type === 'error' ? 'te2' : 'tok'}`}>{msg}</div></div>
@@ -336,7 +354,7 @@ function PanelTickets({ casetas, filtroInicial }) {
 }
 
 // ─── PANEL PEDIDOS ────────────────────────────────────────────
-function PanelPedidos({ casetas }) {
+function PanelPedidos({ casetas, onPedidoAceptado }) {
   const [pedidos,setPedidos]=useState([])
   const [loading,setLoading]=useState(true)
   const [estadoFiltro,setEstadoFiltro]=useState('')
@@ -377,6 +395,7 @@ function PanelPedidos({ casetas }) {
     await updatePedido(id,{estado})
     setPedidos(prev=>prev.map(p=>p.id===id?{...p,estado}:p))
     showToast(`${ESTADO_LABEL[estado]}`)
+    if(estado==='ACEPTADO') onPedidoAceptado && onPedidoAceptado()
   }
 
   if(loading) return <div className="loading-row"><div className="spin-sm"/>Cargando...</div>
@@ -746,7 +765,11 @@ function GestionStock({ casetas }) {
           ))}
         </div>
         <input className="si" style={{maxWidth:200}} placeholder="Buscar..." value={busq} onChange={e=>setBusq(e.target.value)}/>
-        <select value={catFiltro} onChange={e=>setCatFiltro(e.target.value)} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'7px 10px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif"}}>{CATS.map(c=><option key={c}>{c}</option>)}</select>
+        <WheelScrollDiv style={{display:'flex',gap:5,overflowX:'auto',flexShrink:0}}>
+          {CATS.map(c=>(
+            <button key={c} onClick={()=>setCatFiltro(c)} style={{flexShrink:0,padding:'6px 12px',borderRadius:20,fontSize:'.75rem',fontWeight:600,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",background:catFiltro===c?'var(--ac)':'var(--s2)',border:`1px solid ${catFiltro===c?'var(--ac)':'var(--bd)'}`,color:catFiltro===c?'white':'var(--tx2)',whiteSpace:'nowrap'}}>{c}</button>
+          ))}
+        </WheelScrollDiv>
       </div>
 
       {casetaSel&&(
@@ -1044,12 +1067,243 @@ function GestionUsuarios({ casetas }) {
 }
 
 // ─── ADMIN PANEL (raíz) ───────────────────────────────────────
+
+// ─── PANEL FICHAJES (ADMIN) ───────────────────────────────────
+function PanelFichajes({ casetas, adminId }) {
+  const hoy = new Date()
+  const [desde, setDesde]         = useState(new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10))
+  const [hasta, setHasta]         = useState(hoy.toISOString().slice(0,10))
+  const [casetaSel, setCasetaSel] = useState('')
+  const [empleadoSel, setEmpleadoSel] = useState('')
+  const [fichajes, setFichajes]   = useState([])
+  const [perfiles, setPerfiles]   = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [editando, setEditando]   = useState(null) // fichaje en edición
+  const [editTs, setEditTs]       = useState('')
+  const [editNota, setEditNota]   = useState('')
+  const [toast, setToast]         = useState(null)
+  const [vistaAgrup, setVistaAgrup] = useState(true) // true=por empleado, false=lista cruda
+  const showToast = (msg, type='ok') => { setToast({msg,type}); setTimeout(()=>setToast(null),2500) }
+
+  // Cargar perfiles para el filtro
+  useEffect(() => {
+    getPerfiles().then(setPerfiles).catch(()=>{})
+  }, [])
+
+  const buscar = () => {
+    setLoading(true)
+    getFichajesAdmin(desde+'T00:00:00', hasta+'T23:59:59', casetaSel||null, empleadoSel||null)
+      .then(setFichajes).finally(()=>setLoading(false))
+  }
+  useEffect(()=>{ buscar() },[])
+
+  const abrirEdicion = f => {
+    setEditando(f)
+    // Formatear timestamp para input datetime-local
+    const d = new Date(f.timestamp)
+    const local = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16)
+    setEditTs(local)
+    setEditNota(f.notas||'')
+  }
+
+  const guardarEdicion = async () => {
+    try {
+      await editarFichaje(editando.id, adminId, new Date(editTs).toISOString(), editNota)
+      setFichajes(prev=>prev.map(f=>f.id===editando.id?{...f,timestamp:new Date(editTs).toISOString(),notas:editNota,editado:true}:f))
+      setEditando(null); showToast('Fichaje editado ✓')
+    } catch(e) { showToast('Error: '+e.message,'error') }
+  }
+
+  const eliminar = async f => {
+    if(!window.confirm('¿Eliminar este fichaje?')) return
+    try {
+      await deleteFichaje(f.id)
+      setFichajes(prev=>prev.filter(x=>x.id!==f.id)); showToast('Eliminado')
+    } catch(e) { showToast(e.message,'error') }
+  }
+
+  // Agrupar fichajes por empleado y calcular turnos
+  const porEmpleado = {}
+  fichajes.forEach(f=>{
+    const id = f.empleado_id
+    if(!porEmpleado[id]) porEmpleado[id] = { nombre: f.perfiles?.nombre||'?', caseta: f.casetas?.nombre||'?', fichajes:[] }
+    porEmpleado[id].fichajes.push(f)
+  })
+  Object.values(porEmpleado).forEach(emp=>{
+    emp.fichajes.sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp))
+    emp.turnos = calcularTurnos(emp.fichajes)
+    emp.totalMins = emp.turnos.filter(t=>!t.enCurso).reduce((s,t)=>s+t.minutosTrabajados,0)
+    emp.totalDescanso = emp.turnos.filter(t=>!t.enCurso).reduce((s,t)=>s+t.minutosDescanso,0)
+    emp.turnoEnCurso = emp.turnos.find(t=>t.enCurso)
+  })
+
+  const totalMinsGlobal = Object.values(porEmpleado).reduce((s,e)=>s+e.totalMins,0)
+  const totalDescGlobal = Object.values(porEmpleado).reduce((s,e)=>s+(e.turnos||[]).filter(t=>!t.enCurso).reduce((x,t)=>x+t.minutosDescanso,0),0)
+
+  const fmtTs = ts => new Date(ts).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+
+  return (
+    <>
+      {toast&&<Toast msg={toast.msg} type={toast.type}/>}
+
+      {/* Filtros */}
+      <div style={{display:'flex',gap:10,alignItems:'flex-end',marginBottom:16,flexWrap:'wrap'}}>
+        <div className="fg" style={{margin:0}}><label>Desde</label>
+          <input type="date" value={desde} onChange={e=>setDesde(e.target.value)} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'8px 10px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif"}}/></div>
+        <div className="fg" style={{margin:0}}><label>Hasta</label>
+          <input type="date" value={hasta} onChange={e=>setHasta(e.target.value)} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'8px 10px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif"}}/></div>
+        <div className="fg" style={{margin:0}}><label>Caseta</label>
+          <select value={casetaSel} onChange={e=>setCasetaSel(e.target.value)} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'8px 10px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif"}}>
+            <option value="">Todas</option>{casetas.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select></div>
+        <div className="fg" style={{margin:0}}><label>Empleado</label>
+          <select value={empleadoSel} onChange={e=>setEmpleadoSel(e.target.value)} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'8px 10px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif"}}>
+            <option value="">Todos</option>{perfiles.filter(p=>p.rol==='EMPLEADO').map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+          </select></div>
+        <button className="btn-add" onClick={buscar} style={{height:38}}>Buscar</button>
+        {/* Toggle vista */}
+        <div style={{display:'flex',gap:0,background:'var(--s2)',borderRadius:'var(--rs)',padding:3,marginLeft:'auto'}}>
+          <button onClick={()=>setVistaAgrup(true)} style={{padding:'6px 12px',borderRadius:'var(--rs)',border:'none',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontWeight:600,fontSize:'.76rem',background:vistaAgrup?'var(--ac)':'transparent',color:vistaAgrup?'white':'var(--tx2)'}}>Por empleado</button>
+          <button onClick={()=>setVistaAgrup(false)} style={{padding:'6px 12px',borderRadius:'var(--rs)',border:'none',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontWeight:600,fontSize:'.76rem',background:!vistaAgrup?'var(--ac)':'transparent',color:!vistaAgrup?'white':'var(--tx2)'}}>Lista fichajes</button>
+        </div>
+      </div>
+
+      {/* Resumen global */}
+      {!loading&&fichajes.length>0&&(
+        <div className="ag" style={{marginBottom:20}}>
+          <div className="sc"><div className="sv">{Object.keys(porEmpleado).length}</div><div className="sl2">Empleados</div></div>
+          <div className="sc"><div className="sv">{fmtDuracion(totalMinsGlobal)}</div><div className="sl2">Horas trabajadas</div></div>
+          <div className="sc"><div className="sv" style={{color:'var(--gold)'}}>{fmtDuracion(totalDescGlobal)}</div><div className="sl2">En descanso</div></div>
+          <div className="sc"><div className="sv">{calcularTurnos(fichajes.sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp))).filter(t=>!t.enCurso).length}</div><div className="sl2">Turnos completados</div></div>
+          <div className="sc"><div className="sv" style={{color:'var(--green)'}}>{Object.values(porEmpleado).filter(e=>e.turnoEnCurso).length}</div><div className="sl2">Ahora trabajando</div></div>
+        </div>
+      )}
+
+      {loading?<div className="loading-row"><div className="spin-sm"/>Cargando...</div>:(
+        vistaAgrup ? (
+          /* ── VISTA POR EMPLEADO ── */
+          Object.entries(porEmpleado).length===0
+            ? <div style={{textAlign:'center',color:'var(--tx2)',padding:40}}>Sin fichajes en este período</div>
+            : Object.entries(porEmpleado).map(([empId,emp])=>(
+            <div key={empId} style={{background:'var(--s2)',borderRadius:'var(--r)',padding:'14px 16px',marginBottom:14,border:'1px solid var(--bd)'}}>
+              {/* Cabecera empleado */}
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+                <div style={{flex:1}}>
+                  <span style={{fontWeight:700,fontSize:'1rem'}}>{emp.nombre}</span>
+                  <span style={{color:'var(--tx2)',fontSize:'.78rem',marginLeft:8}}>{emp.caseta}</span>
+                  {emp.turnoEnCurso&&(emp.turnoEnCurso.enDescanso
+                    ?<span style={{marginLeft:8,background:'rgba(245,200,66,.15)',color:'var(--gold)',padding:'2px 8px',borderRadius:10,fontSize:'.7rem',fontWeight:700}}>☕ En descanso</span>
+                    :<span style={{marginLeft:8,background:'rgba(34,197,94,.15)',color:'var(--green)',padding:'2px 8px',borderRadius:10,fontSize:'.7rem',fontWeight:700}}>● Trabajando ahora</span>
+                  )}
+                </div>
+                <div style={{textAlign:'right'}}>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'1.6rem',color:'var(--ac)',lineHeight:1}}>{fmtDuracion(emp.totalMins)}</div>
+                  <div style={{fontSize:'.7rem',color:'var(--tx2)'}}>{emp.turnos.filter(t=>!t.enCurso).length} turnos</div>
+                  {emp.totalDescanso>0&&<div style={{fontSize:'.7rem',color:'var(--gold)'}}>☕ {fmtDuracion(emp.totalDescanso)} descanso</div>}
+                </div>
+              </div>
+              {/* Tabla de turnos */}
+              <div className="tw" style={{marginBottom:0}}>
+                <table>
+                  <thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Trabajado</th><th>Descanso</th><th>Acciones</th></tr></thead>
+                  <tbody>
+                    {emp.turnos.slice().reverse().map((t,i)=>(
+                      <tr key={i} style={{background:t.enCurso?'rgba(34,197,94,.05)':t.enDescanso?'rgba(245,200,66,.05)':'transparent'}}>
+                        <td style={{fontSize:'.8rem',color:'var(--tx2)'}}>{new Date(t.entrada.timestamp).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'})}</td>
+                        <td>
+                          <span style={{fontWeight:700,color:'var(--green)'}}>{new Date(t.entrada.timestamp).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</span>
+                          {t.entrada.editado&&<span style={{marginLeft:4,fontSize:'.65rem',color:'var(--gold)'}}>✏️</span>}
+                          {t.entrada.notas&&<div style={{fontSize:'.68rem',color:'var(--tx2)',fontStyle:'italic'}}>{t.entrada.notas}</div>}
+                        </td>
+                        <td>
+                          {t.salida?(
+                            <><span style={{fontWeight:700,color:'var(--red)'}}>{new Date(t.salida.timestamp).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</span>
+                            {t.salida.notas&&<div style={{fontSize:'.68rem',color:'var(--tx2)',fontStyle:'italic'}}>{t.salida.notas}</div>}</>
+                          ):<span style={{color:t.enDescanso?'var(--gold)':'var(--green)',fontSize:'.75rem',fontWeight:700}}>{t.enDescanso?'☕ Descanso':'En curso'}</span>}
+                        </td>
+                        <td style={{fontWeight:700,color:t.enCurso?'var(--green)':'var(--ac)'}}>{fmtDuracion(t.minutosTrabajados)}</td>
+                        <td style={{color:t.minutosDescanso>0?'var(--gold)':'var(--tx2)',fontSize:'.82rem'}}>
+                          {t.minutosDescanso>0?<>☕ {fmtDuracion(t.minutosDescanso)}</>:<span style={{opacity:.4}}>—</span>}
+                        </td>
+                        <td><div className="acell">
+                          <button className="btn-edit" onClick={()=>abrirEdicion(t.entrada)}>✏️ Ent.</button>
+                          {t.salida&&<button className="btn-edit" onClick={()=>abrirEdicion(t.salida)}>✏️ Sal.</button>}
+                          <button className="btn-del" onClick={()=>eliminar(t.entrada)}>✕</button>
+                        </div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))
+        ) : (
+          /* ── VISTA LISTA CRUDA ── */
+          <div className="tw"><table>
+            <thead><tr><th>Empleado</th><th>Caseta</th><th>Tipo</th><th>Fecha y hora</th><th>Notas</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {fichajes.length===0?<tr><td colSpan={6} style={{textAlign:'center',color:'var(--tx2)',padding:20}}>Sin fichajes</td></tr>
+                :fichajes.map(f=>(
+                <tr key={f.id}>
+                  <td style={{fontWeight:600}}>{f.perfiles?.nombre}</td>
+                  <td style={{color:'var(--tx2)',fontSize:'.8rem'}}>{f.casetas?.nombre}</td>
+                  <td><span style={{fontWeight:700,color:f.tipo==='ENTRADA'?'var(--green)':'var(--red)',background:f.tipo==='ENTRADA'?'rgba(34,197,94,.1)':'rgba(239,68,68,.1)',padding:'2px 8px',borderRadius:10,fontSize:'.75rem'}}>{f.tipo}</span></td>
+                  <td style={{fontSize:'.82rem'}}>{fmtTs(f.timestamp)}{f.editado&&<span style={{marginLeft:4,fontSize:'.65rem',color:'var(--gold)'}}>✏️</span>}</td>
+                  <td style={{color:'var(--tx2)',fontSize:'.78rem',fontStyle:'italic'}}>{f.notas||'—'}</td>
+                  <td><div className="acell">
+                    <button className="btn-edit" onClick={()=>abrirEdicion(f)}>Editar</button>
+                    <button className="btn-del" onClick={()=>eliminar(f)}>✕</button>
+                  </div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        )
+      )}
+
+      {/* Modal edición fichaje */}
+      {editando&&(
+        <div className="mo" onClick={e=>e.target===e.currentTarget&&setEditando(null)}>
+          <div className="mc">
+            <div className="mt-modal">✏️ Editar Fichaje</div>
+            <div style={{fontSize:'.8rem',color:'var(--tx2)',marginBottom:16}}>
+              <strong>{fichajes.find(f=>f.id===editando.id)?.perfiles?.nombre||editando.perfiles?.nombre}</strong> · {editando.tipo}
+            </div>
+            <div className="fg">
+              <label>Fecha y hora</label>
+              <input type="datetime-local" value={editTs} onChange={e=>setEditTs(e.target.value)}
+                style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'10px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif",fontSize:'.9rem'}}/>
+            </div>
+            <div className="fg">
+              <label>Nota (opcional)</label>
+              <input value={editNota} onChange={e=>setEditNota(e.target.value)} placeholder="Ej: ajuste manual, error de fichaje..."
+                style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'10px',color:'var(--tx)',fontFamily:"'DM Sans',sans-serif"}}/>
+            </div>
+            <button className="btn-p" onClick={guardarEdicion}>✓ Guardar</button>
+            <button className="btn-s" onClick={()=>setEditando(null)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 export default function AdminPanel({ perfil, casetas: casetasInit }) {
-  const [tab,setTab]=useState('dashboard')
+  // Persistir tab activo — sobrevive a cambios de página
+  const [tab,setTab]=useState(()=>sessionStorage.getItem('admin_tab')||'dashboard')
   const [casetas,setCasetas]=useState(casetasInit)
   const [ticketFiltro,setTicketFiltro]=useState(null)
+  const [pedidosPend,setPedidosPend]=useState(0)
 
-  const irATickets=dia=>{ setTicketFiltro({desde:dia,hasta:dia}); setTab('tickets') }
+  // Contar pedidos pendientes para badge
+  useEffect(()=>{
+    getPedidos({}).then(peds=>{
+      setPedidosPend(peds.filter(p=>p.estado==='PENDIENTE').length)
+    }).catch(()=>{})
+  },[])
+
+  const cambiarTab=(k)=>{ setTab(k); sessionStorage.setItem('admin_tab',k) }
+  const irATickets=dia=>{ setTicketFiltro({desde:dia,hasta:dia}); cambiarTab('tickets') }
 
   return(
     <div className="app">
@@ -1061,15 +1315,26 @@ export default function AdminPanel({ perfil, casetas: casetasInit }) {
           <button className="btn-o" onClick={()=>supabase.auth.signOut()}>Salir</button>
         </div>
       </div>
-      <div className="navtabs">
-        {TABS.map(([k,l])=><button key={k} className={`ntab ${tab===k?'on':''}`} onClick={()=>setTab(k)}>{l}</button>)}
-      </div>
+      <WheelScrollDiv className="navtabs">
+        {TABS.map(([k,l])=>(
+          <button key={k} className={`ntab ${tab===k?'on':''}`} onClick={()=>cambiarTab(k)}
+            style={{position:'relative',flexShrink:0}}>
+            {l}
+            {k==='pedidos'&&pedidosPend>0&&(
+              <span style={{position:'absolute',top:4,right:2,background:'var(--red)',color:'white',borderRadius:'50%',width:16,height:16,fontSize:'.6rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:800,lineHeight:1}}>
+                {pedidosPend}
+              </span>
+            )}
+          </button>
+        ))}
+      </WheelScrollDiv>
       <div className="cnt">
         {tab==='dashboard'   && <Dashboard casetas={casetas}/>}
         {tab==='ventas'      && <PanelVentas casetas={casetas} onVerDia={irATickets}/>}
         {tab==='tickets'     && <PanelTickets casetas={casetas} filtroInicial={ticketFiltro}/>}
-        {tab==='pedidos'     && <PanelPedidos casetas={casetas}/>}
+        {tab==='pedidos'     && <PanelPedidos casetas={casetas} onPedidoAceptado={()=>setPedidosPend(n=>Math.max(0,n-1))}/>}
         {tab==='inventarios' && <PanelInventarios casetas={casetas}/>}
+        {tab==='fichajes'     && <PanelFichajes casetas={casetas} adminId={perfil.id}/>}
         {tab==='productos'   && <GestionProductos/>}
         {tab==='stock'       && <GestionStock casetas={casetas}/>}
         {tab==='ofertas'     && <GestionOfertas/>}

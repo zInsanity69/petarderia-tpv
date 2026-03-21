@@ -459,3 +459,184 @@ export async function getVentasPorDia(casetaId, año, mes) {
   })
   return porDia
 }
+
+// ─── FICHAJES ─────────────────────────────────────────────────
+export async function getUltimoFichaje(empleadoId) {
+  const { data, error } = await supabase
+    .from('fichajes')
+    .select('tipo, timestamp')
+    .eq('empleado_id', empleadoId)
+    .order('timestamp', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) return null
+  return data
+}
+
+export async function fichar(empleadoId, casetaId, tipo, notas = '') {
+  const { data, error } = await supabase
+    .from('fichajes')
+    .insert({ empleado_id: empleadoId, caseta_id: casetaId, tipo, notas: notas || null })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getFichajesEmpleado(empleadoId, desde, hasta) {
+  let q = supabase
+    .from('fichajes')
+    .select('*')
+    .eq('empleado_id', empleadoId)
+    .order('timestamp', { ascending: true })
+  if (desde) q = q.gte('timestamp', desde)
+  if (hasta) q = q.lte('timestamp', hasta)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function getFichajesAdmin(desde, hasta, casetaId, empleadoId) {
+  let q = supabase
+    .from('fichajes')
+    .select('*, perfiles(nombre, caseta_id), casetas(nombre)')
+    .order('timestamp', { ascending: false })
+  if (desde)      q = q.gte('timestamp', desde)
+  if (hasta)      q = q.lte('timestamp', hasta)
+  if (casetaId)   q = q.eq('caseta_id', casetaId)
+  if (empleadoId) q = q.eq('empleado_id', empleadoId)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function editarFichaje(fichajeId, adminId, nuevoTimestamp, notas) {
+  const { error } = await supabase
+    .from('fichajes')
+    .update({
+      timestamp:  nuevoTimestamp,
+      notas:      notas || null,
+      editado:    true,
+      editado_por: adminId,
+    })
+    .eq('id', fichajeId)
+  if (error) throw error
+}
+
+export async function deleteFichaje(fichajeId) {
+  const { error } = await supabase.from('fichajes').delete().eq('id', fichajeId)
+  if (error) throw error
+}
+
+// Calcular estado actual a partir del último fichaje
+// Posibles estados: 'libre' | 'trabajando' | 'descanso'
+export function calcularEstado(ultimoFichaje) {
+  if (!ultimoFichaje) return 'libre'
+  switch (ultimoFichaje.tipo) {
+    case 'ENTRADA':       return 'trabajando'
+    case 'INICIO_DESCANSO': return 'descanso'
+    case 'FIN_DESCANSO':  return 'trabajando'
+    case 'SALIDA':        return 'libre'
+    default:              return 'libre'
+  }
+}
+
+// Calcular turnos completos con descansos a partir de array de fichajes ordenados por timestamp ASC
+// Devuelve array de turnos: { entrada, salida, descansos[], minutosTrabajados, minutosDescanso, enCurso, enDescanso }
+export function calcularTurnos(fichajes) {
+  const sorted = [...fichajes].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+  const turnos = []
+  let turnoActual = null   // { entrada, descansos: [], inicioDescansoActual }
+
+  for (const f of sorted) {
+    switch (f.tipo) {
+      case 'ENTRADA':
+        // Nuevo turno — si había uno abierto sin salida lo cerramos como en curso
+        if (turnoActual) {
+          turnos.push(_cerrarTurno(turnoActual, null))
+        }
+        turnoActual = { entrada: f, descansos: [], inicioDescansoActual: null }
+        break
+
+      case 'INICIO_DESCANSO':
+        if (turnoActual && !turnoActual.inicioDescansoActual) {
+          turnoActual.inicioDescansoActual = f
+        }
+        break
+
+      case 'FIN_DESCANSO':
+        if (turnoActual && turnoActual.inicioDescansoActual) {
+          const mins = (new Date(f.timestamp) - new Date(turnoActual.inicioDescansoActual.timestamp)) / 60000
+          turnoActual.descansos.push({
+            inicio: turnoActual.inicioDescansoActual,
+            fin: f,
+            minutos: mins,
+          })
+          turnoActual.inicioDescansoActual = null
+        }
+        break
+
+      case 'SALIDA':
+        if (turnoActual) {
+          // Si había descanso sin cerrar, lo cerramos con la salida
+          if (turnoActual.inicioDescansoActual) {
+            turnoActual.descansos.push({
+              inicio: turnoActual.inicioDescansoActual,
+              fin: f,
+              minutos: (new Date(f.timestamp) - new Date(turnoActual.inicioDescansoActual.timestamp)) / 60000,
+            })
+            turnoActual.inicioDescansoActual = null
+          }
+          turnos.push(_cerrarTurno(turnoActual, f))
+          turnoActual = null
+        }
+        break
+    }
+  }
+
+  // Turno aún abierto
+  if (turnoActual) {
+    turnos.push(_cerrarTurno(turnoActual, null))
+  }
+
+  return turnos
+}
+
+function _cerrarTurno(turnoActual, salida) {
+  const ahora = new Date()
+  const finReal = salida ? new Date(salida.timestamp) : ahora
+  const minutosTotales = (finReal - new Date(turnoActual.entrada.timestamp)) / 60000
+
+  // Sumar minutos de descanso ya cerrados
+  let minutosDescanso = turnoActual.descansos.reduce((s, d) => s + d.minutos, 0)
+
+  // Descanso aún abierto (sin FIN_DESCANSO)
+  const enDescanso = !!turnoActual.inicioDescansoActual
+  let descansoEnCurso = null
+  if (enDescanso && turnoActual.inicioDescansoActual) {
+    const minsDesc = (ahora - new Date(turnoActual.inicioDescansoActual.timestamp)) / 60000
+    minutosDescanso += minsDesc
+    descansoEnCurso = { inicio: turnoActual.inicioDescansoActual, minutos: minsDesc }
+  }
+
+  const minutosTrabajados = Math.max(0, minutosTotales - minutosDescanso)
+
+  return {
+    entrada:          turnoActual.entrada,
+    salida:           salida,
+    descansos:        turnoActual.descansos,
+    descansoEnCurso,
+    enCurso:          !salida,
+    enDescanso,
+    minutosTotales,
+    minutosTrabajados,
+    minutosDescanso,
+  }
+}
+
+export function fmtDuracion(minutos) {
+  if (!minutos && minutos !== 0) return '—'
+  const h = Math.floor(minutos / 60)
+  const m = Math.round(minutos % 60)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}

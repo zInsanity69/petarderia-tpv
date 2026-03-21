@@ -8,9 +8,34 @@ import {
   getPedidos, crearPedido, confirmarRecepcionPedido,
   crearInventario, getInventarios, confirmarInventario,
   getKgPolvora, getLimitePolvora,
+  getUltimoFichaje, fichar, getFichajesEmpleado, calcularTurnos, calcularEstado, fmtDuracion,
 } from '../lib/api.js'
 import { calcularPrecio, calcularTotalTicket, detectarOfertasCombinadas, fmt } from '../lib/precios.js'
 import Scanner from './Scanner.jsx'
+
+// ─── HOOK SCROLL HORIZONTAL CON RUEDA ────────────────────────
+// Permite desplazar contenedores con overflow-x con la rueda del ratón
+function useWheelScroll() {
+  const ref = useRef(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const handler = (e) => {
+      if (e.deltaY === 0) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY
+    }
+    el.addEventListener('wheel', handler, { passive: false })
+    return () => el.removeEventListener('wheel', handler)
+  }, [])
+  return ref
+}
+
+// Componente wrapper que habilita scroll horizontal con rueda del ratón
+function WheelScrollDiv({ children, className, style }) {
+  const ref = useWheelScroll()
+  return <div ref={ref} className={className} style={style}>{children}</div>
+}
 
 function Toast({ msg, type }) {
   return <div className="twrap"><div className={`toast ${type === 'error' ? 'te2' : 'tok'}`}>{msg}</div></div>
@@ -646,8 +671,8 @@ function ModalPedido({ caseta, perfil, productos, stock, onClose, onCreado, show
             <input className="si" placeholder="Buscar producto..."
               value={busq} onChange={e => setBusq(e.target.value)} style={{ marginBottom: 8 }} />
 
-            {/* Filtro categorías — scroll horizontal, no comprimido */}
-            <div style={{ overflowX: 'auto', display: 'flex', gap: 6, paddingBottom: 8, marginBottom: 6, flexShrink: 0 }}>
+            {/* Filtro categorías — scroll horizontal con rueda del ratón */}
+            <WheelScrollDiv style={{ overflowX: 'auto', display: 'flex', gap: 6, paddingBottom: 8, marginBottom: 6, flexShrink: 0 }}>
               {cats.map(c => (
                 <button key={c} onClick={() => setCatFiltro(c)} style={{
                   flexShrink: 0, padding: '5px 12px', borderRadius: 20, fontSize: '.75rem',
@@ -658,7 +683,7 @@ function ModalPedido({ caseta, perfil, productos, stock, onClose, onCreado, show
                   whiteSpace: 'nowrap',
                 }}>{c}</button>
               ))}
-            </div>
+            </WheelScrollDiv>
 
             {/* Lista productos con stock */}
             <div style={{ overflowY: 'auto', flex: 1 }}>
@@ -673,21 +698,38 @@ function ModalPedido({ caseta, perfil, productos, stock, onClose, onCreado, show
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: '.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</div>
-                      <div style={{ fontSize: '.72rem', display: 'flex', gap: 10, marginTop: 2 }}>
-                        <span style={{ color: stockDisp === 0 ? 'var(--red)' : stockDisp < 10 ? 'var(--gold)' : 'var(--green)', fontWeight: 700 }}>
-                          Stock: {stockDisp}
-                        </span>
+                      <div style={{ fontSize: '.72rem', display: 'flex', gap: 8, marginTop: 3, alignItems: 'center' }}>
+                        {stockDisp === 0 ? (
+                          <span style={{ background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.4)', color: 'var(--red)', fontWeight: 800, padding: '1px 7px', borderRadius: 10, fontSize: '.7rem' }}>
+                            ❌ AGOTADO
+                          </span>
+                        ) : stockDisp < 10 ? (
+                          <span style={{ background: 'rgba(245,200,66,.15)', border: '1px solid rgba(245,200,66,.4)', color: 'var(--gold)', fontWeight: 700, padding: '1px 7px', borderRadius: 10, fontSize: '.7rem' }}>
+                            ⚠️ Stock: {stockDisp}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--green)', fontWeight: 600 }}>Stock: {stockDisp}</span>
+                        )}
                         <span style={{ color: 'var(--tx2)' }}>{p.categoria}</span>
-                        <span style={{ color: 'var(--ac)' }}>{fmt(p.precio)}</span>
+                        <span style={{ color: 'var(--tx2)', opacity: .7 }}>{fmt(p.precio)}</span>
                       </div>
                     </div>
                     {/* Controles cantidad a pedir */}
                     {enPedido > 0 ? (
-                      <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <button className="qb" onClick={() => addItem(p, -1)}>−</button>
-                        <span style={{ minWidth: 24, textAlign: 'center', fontWeight: 700, color: 'var(--ac)', fontSize: '.9rem' }}>{enPedido}</span>
+                        <input
+                          type="number" min="1" value={enPedido}
+                          onChange={e => {
+                            const q = Math.max(0, parseInt(e.target.value) || 0)
+                            if (q === 0) addItem(p, -enPedido)
+                            else setItems(prev => prev.map(i => i.producto_id === p.id ? { ...i, cantidad: q } : i))
+                          }}
+                          style={{ width: 48, textAlign: 'center', background: 'var(--s2)', border: '1px solid var(--ac)', borderRadius: 'var(--rs)', color: 'var(--ac)', fontWeight: 800, fontFamily: "'DM Sans',sans-serif", padding: '4px 2px', fontSize: '.9rem' }}
+                          inputMode="numeric"
+                        />
                         <button className="qb" onClick={() => addItem(p, +1)}>+</button>
-                      </>
+                      </div>
                     ) : (
                       <button onClick={() => addItem(p, 1)} style={{
                         padding: '6px 14px', borderRadius: 'var(--rs)',
@@ -1058,8 +1100,8 @@ function ModalInventario({ caseta, perfil, productos, stockActual, onClose, show
         <input className="si" placeholder="Buscar producto..."
           value={busq} onChange={e => setBusq(e.target.value)} style={{ marginBottom: 8 }} />
 
-        {/* Fix: scroll horizontal en lugar de catbar comprimido */}
-        <div style={{ overflowX: 'auto', display: 'flex', gap: 6, paddingBottom: 6, marginBottom: 6, flexShrink: 0 }}>
+        {/* Fix: scroll horizontal con rueda del ratón */}
+        <WheelScrollDiv style={{ overflowX: 'auto', display: 'flex', gap: 6, paddingBottom: 6, marginBottom: 6, flexShrink: 0 }}>
           {cats.map(c => (
             <button key={c} onClick={() => setCatFiltro(c)} style={{
               flexShrink: 0, padding: '5px 12px', borderRadius: 20, fontSize: '.75rem',
@@ -1070,7 +1112,7 @@ function ModalInventario({ caseta, perfil, productos, stockActual, onClose, show
               whiteSpace: 'nowrap',
             }}>{c}</button>
           ))}
-        </div>
+        </WheelScrollDiv>
 
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {itemsFiltrados.map(item => (
@@ -1128,6 +1170,233 @@ function BadgeKgPolvora({ kgActual, kgLimite }) {
 }
 
 // ─── EMPLEADO PANEL ───────────────────────────────────────────
+
+// ─── MODAL MIS FICHAJES ───────────────────────────────────────
+function ModalFichajes({ perfil, caseta, ultimoFichaje, onFichar, onClose, showToast }) {
+  const [semana, setSemana]     = useState(0)
+  const [fichajes, setFichajes] = useState([])
+  const [loading, setLoading]   = useState(true)
+  const [fichandoType, setFichandoType] = useState(null)
+  const [notas, setNotas]       = useState('')
+  const [showNotas, setShowNotas] = useState(false)
+
+  const estado = calcularEstado(ultimoFichaje) // 'libre' | 'trabajando' | 'descanso'
+
+  const getLunesSemana = (offset = 0) => {
+    const d = new Date(); d.setDate(d.getDate() - ((d.getDay()+6)%7) + offset*7); d.setHours(0,0,0,0); return d
+  }
+  const getFinSemana = (offset = 0) => {
+    const d = getLunesSemana(offset); d.setDate(d.getDate()+6); d.setHours(23,59,59,999); return d
+  }
+
+  const cargar = () => {
+    setLoading(true)
+    getFichajesEmpleado(perfil.id, getLunesSemana(semana).toISOString(), getFinSemana(semana).toISOString())
+      .then(setFichajes).finally(()=>setLoading(false))
+  }
+  useEffect(()=>{ cargar() },[semana])
+
+  const turnos = calcularTurnos(fichajes)
+  const totalTrabajado = turnos.filter(t=>!t.enCurso).reduce((s,t)=>s+t.minutosTrabajados,0)
+  const turnoHoy = turnos.find(t=>t.enCurso)
+
+  const handleFichar = async (tipo) => {
+    setFichandoType(tipo)
+    try {
+      const f = await fichar(perfil.id, caseta.id, tipo, notas)
+      const mensajes = {
+        ENTRADA:          '🟢 Entrada registrada',
+        SALIDA:           '🔴 Salida registrada',
+        INICIO_DESCANSO:  '☕ Descanso iniciado',
+        FIN_DESCANSO:     '▶️ Volviendo al trabajo',
+      }
+      showToast(mensajes[tipo] || '✓ Fichaje registrado')
+      onFichar({ tipo, timestamp: f.timestamp })
+      setNotas('')
+      setShowNotas(false)
+      cargar()
+    } catch(e) { showToast('Error: '+e.message, 'error') }
+    setFichandoType(null)
+  }
+
+  const loading2 = fichandoType !== null
+
+  // Calcular tiempo en descanso actual si está descansando
+  const minsDescansoActual = estado === 'descanso' && ultimoFichaje
+    ? (Date.now() - new Date(ultimoFichaje.timestamp)) / 60000 : 0
+
+  // Colores y textos según estado
+  const estadoCfg = {
+    libre:     { color: 'var(--tx2)',    bg: 'var(--s2)',                 border: 'var(--bd)',                  dot: 'var(--s3)',       label: 'Sin fichar' },
+    trabajando:{ color: 'var(--green)',  bg: 'rgba(34,197,94,.08)',       border: 'rgba(34,197,94,.3)',          dot: 'var(--green)',    label: 'Trabajando' },
+    descanso:  { color: 'var(--gold)',   bg: 'rgba(245,200,66,.08)',      border: 'rgba(245,200,66,.3)',         dot: 'var(--gold)',     label: 'En descanso' },
+  }
+  const cfg = estadoCfg[estado]
+
+  const labelSemana = semana===0 ? 'Esta semana'
+    : semana===-1 ? 'Semana pasada'
+    : `${getLunesSemana(semana).toLocaleDateString('es-ES',{day:'numeric',month:'short'})} – ${getFinSemana(semana).toLocaleDateString('es-ES',{day:'numeric',month:'short'})}`
+
+  return (
+    <div className="mo" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="mc wide" style={{maxHeight:'93vh',display:'flex',flexDirection:'column'}}>
+        <div className="mt-modal">⏱ Control de Presencia</div>
+        <div style={{fontSize:'.8rem',color:'var(--tx2)',marginBottom:14}}>{perfil.nombre} · {caseta.nombre}</div>
+
+        {/* ── Tarjeta de estado ── */}
+        <div style={{background:cfg.bg,border:`1px solid ${cfg.border}`,borderRadius:'var(--r)',padding:'14px 16px',marginBottom:14}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+            <div style={{width:10,height:10,borderRadius:'50%',background:cfg.dot,flexShrink:0,
+              animation:estado!=='libre'?'pulse 1.5s ease-in-out infinite':'none'}}/>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:'1rem',color:cfg.color}}>{cfg.label}</div>
+              {ultimoFichaje&&(
+                <div style={{fontSize:'.74rem',color:'var(--tx2)'}}>
+                  Desde las {new Date(ultimoFichaje.timestamp).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}
+                  {estado==='trabajando'&&turnoHoy&&<span style={{color:'var(--green)',marginLeft:6,fontWeight:600}}>
+                    · {fmtDuracion(turnoHoy.minutosTrabajados)} trabajado
+                  </span>}
+                  {estado==='descanso'&&<span style={{color:'var(--gold)',marginLeft:6,fontWeight:600}}>
+                    · {fmtDuracion(minsDescansoActual)} de descanso
+                  </span>}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Nota opcional */}
+          {showNotas&&(
+            <input placeholder="Nota (opcional)..." value={notas} onChange={e=>setNotas(e.target.value)}
+              style={{width:'100%',background:'var(--s1)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',color:'var(--tx)',padding:'7px 10px',fontSize:'.82rem',fontFamily:"'DM Sans',sans-serif",marginBottom:10,boxSizing:'border-box'}}/>
+          )}
+
+          {/* Botones de acción según estado */}
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+            {estado==='libre'&&(
+              <button className="btn-p" style={{flex:1,marginTop:0,padding:'10px 0'}}
+                disabled={loading2} onClick={()=>handleFichar('ENTRADA')}>
+                {fichandoType==='ENTRADA'?'...':'🟢 Fichar entrada'}
+              </button>
+            )}
+            {estado==='trabajando'&&(<>
+              <button onClick={()=>handleFichar('INICIO_DESCANSO')} disabled={loading2} style={{
+                flex:1,padding:'10px 0',borderRadius:'var(--rs)',border:'1px solid rgba(245,200,66,.5)',
+                background:'rgba(245,200,66,.1)',color:'var(--gold)',fontWeight:700,cursor:'pointer',
+                fontFamily:"'DM Sans',sans-serif",fontSize:'.85rem',
+              }}>{fichandoType==='INICIO_DESCANSO'?'...':'☕ Iniciar descanso'}</button>
+              <button onClick={()=>handleFichar('SALIDA')} disabled={loading2} style={{
+                flex:1,padding:'10px 0',borderRadius:'var(--rs)',border:'1px solid rgba(239,68,68,.4)',
+                background:'rgba(239,68,68,.1)',color:'var(--red)',fontWeight:700,cursor:'pointer',
+                fontFamily:"'DM Sans',sans-serif",fontSize:'.85rem',
+              }}>{fichandoType==='SALIDA'?'...':'🔴 Fichar salida'}</button>
+            </>)}
+            {estado==='descanso'&&(<>
+              <button onClick={()=>handleFichar('FIN_DESCANSO')} disabled={loading2} style={{
+                flex:1,padding:'10px 0',borderRadius:'var(--rs)',border:'1px solid rgba(34,197,94,.4)',
+                background:'rgba(34,197,94,.1)',color:'var(--green)',fontWeight:700,cursor:'pointer',
+                fontFamily:"'DM Sans',sans-serif",fontSize:'.85rem',
+              }}>{fichandoType==='FIN_DESCANSO'?'...':'▶️ Volver al trabajo'}</button>
+              <button onClick={()=>handleFichar('SALIDA')} disabled={loading2} style={{
+                flex:1,padding:'10px 0',borderRadius:'var(--rs)',border:'1px solid rgba(239,68,68,.4)',
+                background:'rgba(239,68,68,.1)',color:'var(--red)',fontWeight:700,cursor:'pointer',
+                fontFamily:"'DM Sans',sans-serif",fontSize:'.85rem',
+              }}>{fichandoType==='SALIDA'?'...':'🔴 Salida directa'}</button>
+            </>)}
+            <button onClick={()=>setShowNotas(v=>!v)} title="Añadir nota" style={{
+              padding:'9px 12px',borderRadius:'var(--rs)',border:'1px solid var(--bd)',
+              background:showNotas?'var(--s2)':'transparent',color:'var(--tx2)',
+              cursor:'pointer',fontSize:'.75rem',fontFamily:"'DM Sans',sans-serif",
+            }}>📝</button>
+          </div>
+        </div>
+
+        {/* ── Navegación semana ── */}
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+          <button onClick={()=>setSemana(s=>s-1)} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'6px 12px',color:'var(--tx2)',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>‹</button>
+          <span style={{flex:1,textAlign:'center',fontSize:'.83rem',fontWeight:600}}>{labelSemana}</span>
+          <button onClick={()=>setSemana(s=>Math.min(0,s+1))} disabled={semana>=0}
+            style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'6px 12px',color:semana>=0?'var(--s3)':'var(--tx2)',cursor:semana>=0?'default':'pointer',fontFamily:"'DM Sans',sans-serif"}}>›</button>
+          {!loading&&<span style={{fontSize:'.78rem',color:'var(--ac)',fontWeight:700,whiteSpace:'nowrap'}}>{fmtDuracion(totalTrabajado)} trabajado</span>}
+        </div>
+
+        {/* ── Lista de turnos ── */}
+        <div style={{overflowY:'auto',flex:1}}>
+          {loading
+            ?<div className="loading-row"><div className="spin-sm"/>Cargando...</div>
+            :turnos.length===0
+              ?<div style={{textAlign:'center',color:'var(--tx2)',padding:30,fontSize:'.85rem'}}>Sin fichajes esta semana</div>
+              :[...turnos].reverse().map((t,i)=>(
+              <div key={i} style={{
+                background:t.enCurso?'rgba(34,197,94,.06)':t.enDescanso?'rgba(245,200,66,.06)':'var(--s2)',
+                border:`1px solid ${t.enCurso?'rgba(34,197,94,.25)':t.enDescanso?'rgba(245,200,66,.25)':'var(--bd)'}`,
+                borderRadius:'var(--rs)',padding:'11px 14px',marginBottom:8,
+              }}>
+                {/* Fecha */}
+                <div style={{fontSize:'.72rem',color:'var(--tx2)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.5px'}}>
+                  {new Date(t.entrada.timestamp).toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'short'})}
+                  {t.enCurso&&<span style={{marginLeft:8,color:t.enDescanso?'var(--gold)':'var(--green)',fontSize:'.7rem'}}>{t.enDescanso?'● En descanso':'● En curso'}</span>}
+                </div>
+
+                {/* Entrada / Salida / Duración */}
+                <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:t.descansos.length>0||t.descansoEnCurso?8:0}}>
+                  <div style={{textAlign:'center',minWidth:56}}>
+                    <div style={{fontSize:'.62rem',color:'var(--green)',fontWeight:700,marginBottom:2}}>ENTRADA</div>
+                    <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'1.4rem',lineHeight:1}}>
+                      {new Date(t.entrada.timestamp).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}
+                    </div>
+                  </div>
+                  <div style={{flex:1,textAlign:'center'}}>
+                    <div style={{fontSize:'.7rem',color:'var(--tx2)',marginBottom:2}}>trabajado</div>
+                    <div style={{fontWeight:800,fontSize:'1.05rem',color:t.enCurso?'var(--green)':'var(--ac)'}}>
+                      {fmtDuracion(t.minutosTrabajados)}
+                    </div>
+                    {t.minutosDescanso>0&&(
+                      <div style={{fontSize:'.67rem',color:'var(--gold)'}}>☕ {fmtDuracion(t.minutosDescanso)} descanso</div>
+                    )}
+                  </div>
+                  <div style={{textAlign:'center',minWidth:56}}>
+                    <div style={{fontSize:'.62rem',color:'var(--red)',fontWeight:700,marginBottom:2}}>SALIDA</div>
+                    <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'1.4rem',lineHeight:1,color:t.salida?'var(--tx)':'var(--tx2)'}}>
+                      {t.salida?new Date(t.salida.timestamp).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}):'—:——'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Descansos del turno */}
+                {(t.descansos.length>0||t.descansoEnCurso)&&(
+                  <div style={{borderTop:'1px dashed rgba(245,200,66,.3)',paddingTop:6,marginTop:4}}>
+                    {t.descansos.map((d,j)=>(
+                      <div key={j} style={{display:'flex',gap:8,fontSize:'.73rem',color:'var(--gold)',marginBottom:2}}>
+                        <span>☕</span>
+                        <span>{new Date(d.inicio.timestamp).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</span>
+                        <span style={{color:'var(--tx2)'}}>→</span>
+                        <span>{new Date(d.fin.timestamp).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</span>
+                        <span style={{color:'var(--tx2)'}}>({fmtDuracion(d.minutos)})</span>
+                      </div>
+                    ))}
+                    {t.descansoEnCurso&&(
+                      <div style={{display:'flex',gap:8,fontSize:'.73rem',color:'var(--gold)'}}>
+                        <span>☕</span>
+                        <span>{new Date(t.descansoEnCurso.inicio.timestamp).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</span>
+                        <span style={{color:'var(--tx2)'}}>→ en curso ({fmtDuracion(t.descansoEnCurso.minutos)})</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {t.entrada.notas&&<div style={{fontSize:'.72rem',color:'var(--tx2)',marginTop:5,fontStyle:'italic'}}>📝 {t.entrada.notas}</div>}
+              </div>
+            ))
+          }
+        </div>
+
+        <button className="btn-s" style={{marginTop:12}} onClick={onClose}>Cerrar</button>
+      </div>
+    </div>
+  )
+}
+
+
 export default function EmpleadoPanel({ perfil, casetas }) {
   const caseta = casetas.find(c => c.id === perfil.caseta_id)
 
@@ -1154,9 +1423,12 @@ export default function EmpleadoPanel({ perfil, casetas }) {
 
   const [favoritos,      setFavoritos]      = useState(() => getFavoritos())
   const [prodModal,      setProdModal]      = useState(null)
+  // Persistir panel abierto (pedidos/inventario) para que al volver no pierdan su posición
   const [showPedido,     setShowPedido]     = useState(false)
-  const [showMisPedidos, setShowMisPedidos] = useState(false)
-  const [showInventario, setShowInventario] = useState(false)
+  const [showMisPedidos, setShowMisPedidos] = useState(()=>sessionStorage.getItem('tpv_panel')==='pedidos')
+  const [showInventario, setShowInventario] = useState(()=>sessionStorage.getItem('tpv_panel')==='inventario')
+  const [showFichajes,   setShowFichajes]   = useState(false)
+  const [ultimoFichaje,  setUltimoFichaje]  = useState(null)
   const [kgPolvora,      setKgPolvora]      = useState(0)
   const [kgLimite,       setKgLimite]       = useState(10)
   const [pedidosPend,    setPedidosPend]    = useState(0)
@@ -1183,6 +1455,8 @@ export default function EmpleadoPanel({ perfil, casetas }) {
       setPedidosPend(peds.filter(p => p.estado === 'EN_CAMINO').length)
       if (cajaAbierta) { setCaja(cajaAbierta); getResumenCaja(cajaAbierta.id).then(setVentas) }
     }).finally(() => setLoading(false))
+    // Cargar último fichaje
+    getUltimoFichaje(perfil.id).then(setUltimoFichaje)
   }, [caseta?.id])
 
   // Realtime stock
@@ -1319,6 +1593,27 @@ export default function EmpleadoPanel({ perfil, casetas }) {
         <div className="tl">💥 Caballer</div>
         <div className="ti">
           <BadgeKgPolvora kgActual={kgPolvora} kgLimite={kgLimite} />
+          {/* Botón de fichaje — color según estado */}
+          {(() => {
+            const est = calcularEstado(ultimoFichaje)
+            const cfgBtn = {
+              libre:      { border:'var(--bd)',               bg:'var(--s2)',                dot:'var(--s3)',    label:'Fichar',          anim:false },
+              trabajando: { border:'rgba(34,197,94,.4)',      bg:'rgba(34,197,94,.12)',      dot:'var(--green)', label:'Trabajando',      anim:true  },
+              descanso:   { border:'rgba(245,200,66,.4)',     bg:'rgba(245,200,66,.12)',     dot:'var(--gold)',  label:'Descansando',     anim:true  },
+            }[est] || {}
+            return (
+              <button onClick={() => setShowFichajes(true)} style={{
+                display:'flex',alignItems:'center',gap:5,padding:'5px 12px',
+                borderRadius:20,border:'1px solid',borderColor:cfgBtn.border,
+                background:cfgBtn.bg,color:est==='descanso'?'var(--gold)':est==='trabajando'?'var(--green)':'var(--tx2)',
+                cursor:'pointer',fontSize:'.75rem',fontWeight:700,fontFamily:"'DM Sans',sans-serif",
+              }}>
+                <span style={{width:7,height:7,borderRadius:'50%',background:cfgBtn.dot,display:'inline-block',
+                  animation:cfgBtn.anim?'pulse 1.5s ease-in-out infinite':'none'}}/>
+                {cfgBtn.label}
+              </button>
+            )
+          })()}
           <span style={{ fontSize: '.79rem', color: 'var(--tx2)' }}>{caseta?.nombre}</span>
           <span className="badge be">Empleado</span>
           <button className="btn-o" onClick={() => supabase.auth.signOut()}>Salir</button>
@@ -1349,7 +1644,7 @@ export default function EmpleadoPanel({ perfil, casetas }) {
         {modoRapido && <span style={{ background: 'rgba(34,197,94,.15)', color: 'var(--green)', padding: '2px 8px', borderRadius: 20, fontSize: '.7rem', fontWeight: 700 }}>⚡ MODO RÁPIDO</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
           <button className="btn-o" onClick={() => setShowHistorial(true)}>Ver tickets</button>
-          <button className="btn-o" style={{ position: 'relative' }} onClick={() => setShowMisPedidos(true)}>
+          <button className="btn-o" style={{ position: 'relative' }} onClick={() => { setShowMisPedidos(true); sessionStorage.setItem('tpv_panel','pedidos') }}>
             📋 Pedidos
             {pedidosPend > 0 && (
               <span style={{ position: 'absolute', top: -5, right: -5, background: 'var(--ac)', color: 'white', borderRadius: '50%', width: 16, height: 16, fontSize: '.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
@@ -1358,7 +1653,7 @@ export default function EmpleadoPanel({ perfil, casetas }) {
             )}
           </button>
           <button className="btn-o" onClick={() => setShowPedido(true)}>📤 Pedir</button>
-          <button className="btn-o" onClick={() => setShowInventario(true)}>📋 Inventario</button>
+          <button className="btn-o" onClick={() => { setShowInventario(true); sessionStorage.setItem('tpv_panel','inventario') }}>📋 Inventario</button>
           <button className="btn-o" onClick={() => setShowCierre(true)}>Cerrar Caja</button>
         </div>
       </div>
@@ -1389,13 +1684,13 @@ export default function EmpleadoPanel({ perfil, casetas }) {
               ))}
             </div>
 
-            {/* Categorías */}
+            {/* Categorías — scroll con rueda */}
             {tabTPV === 'todos' && (
-              <div className="catbar">
+              <WheelScrollDiv className="catbar">
                 {CATS.map(c => (
                   <button key={c} className={`ct ${cat2 === c ? 'on' : ''}`} onClick={() => setCat2(c)}>{c}</button>
                 ))}
-              </div>
+              </WheelScrollDiv>
             )}
 
             {/* Botones rápidos */}
@@ -1591,11 +1886,11 @@ export default function EmpleadoPanel({ perfil, casetas }) {
       {showMisPedidos && (
         <ModalMisPedidos caseta={caseta} perfil={perfil} productos={productos}
           showToast={showToast}
-          onClose={() => { setShowMisPedidos(false); getKgPolvora(caseta.id).then(setKgPolvora) }} />
+          onClose={() => { setShowMisPedidos(false); sessionStorage.removeItem('tpv_panel'); getKgPolvora(caseta.id).then(setKgPolvora) }} />
       )}
       {showInventario && (
         <ModalInventario caseta={caseta} perfil={perfil} productos={productos} stockActual={stock}
-          showToast={showToast} onClose={() => setShowInventario(false)} />
+          showToast={showToast} onClose={() => { setShowInventario(false); sessionStorage.removeItem('tpv_panel') }} />
       )}
       {showOk && (
         <div className="mo">
@@ -1610,6 +1905,16 @@ export default function EmpleadoPanel({ perfil, casetas }) {
           </div>
         </div>
       )}
+      {showFichajes && (
+        <ModalFichajes
+          perfil={perfil} caseta={caseta}
+          ultimoFichaje={ultimoFichaje}
+          showToast={showToast}
+          onFichar={(f) => setUltimoFichaje(f)}
+          onClose={() => setShowFichajes(false)}
+        />
+      )}
+
       {toast && <Toast msg={toast.msg} type={toast.type} />}
     </div>
   )
