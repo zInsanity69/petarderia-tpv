@@ -781,7 +781,13 @@ function GestionStock({ casetas }) {
           <div style={{height:6,background:'var(--s3)',borderRadius:3,overflow:'hidden'}}>
             <div style={{height:'100%',width:`${Math.min(100,pctKg)}%`,background:pctKg>=90?'var(--red)':pctKg>=75?'var(--gold)':'var(--green)',borderRadius:3,transition:'width .5s'}}/>
           </div>
-          {pctKg>=80&&<div style={{fontSize:'.75rem',marginTop:5,color:pctKg>=90?'var(--red)':'var(--gold)',fontWeight:700}}>⚠️ {pctKg>=90?'ALERTA: Límite casi alcanzado. No añadir más stock.':'Advertencia: Stock al 80% del límite legal.'}</div>}
+          {pctKg>=80&&<div style={{fontSize:'.75rem',marginTop:5,color:pctKg>=100?'var(--red)':pctKg>=90?'var(--red)':'var(--gold)',fontWeight:700}}>
+            {pctKg>=100
+              ? '🚨 LÍMITE SUPERADO. Obligatorio reducir stock antes de recibir más mercancía.'
+              : pctKg>=90
+              ? '⚠️ ALERTA: Más del 90% del límite. No añadir más stock.'
+              : '⚠️ Advertencia: Stock al 80% del límite legal.'}
+          </div>}
         </div>
       )}
 
@@ -1071,7 +1077,9 @@ function GestionUsuarios({ casetas }) {
 // ─── PANEL FICHAJES (ADMIN) ───────────────────────────────────
 function PanelFichajes({ casetas, adminId }) {
   const hoy = new Date()
-  const [desde, setDesde]         = useState(new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10))
+  // Por defecto: desde el lunes de esta semana hasta hoy
+  const _lunes = new Date(hoy); _lunes.setDate(hoy.getDate() - ((hoy.getDay()+6)%7)); _lunes.setHours(0,0,0,0)
+  const [desde, setDesde]         = useState(_lunes.toISOString().slice(0,10))
   const [hasta, setHasta]         = useState(hoy.toISOString().slice(0,10))
   const [casetaSel, setCasetaSel] = useState('')
   const [empleadoSel, setEmpleadoSel] = useState('')

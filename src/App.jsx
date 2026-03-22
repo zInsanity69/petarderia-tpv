@@ -15,18 +15,25 @@ export default function App() {
 
   // Escuchar cambios de sesión
   useEffect(() => {
+    // Carga inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      // TOKEN_REFRESHED ocurre al volver de otra pestaña — NO queremos recargar
+      // Solo actualizamos sesión en eventos que realmente cambian el estado
+      if (event === 'TOKEN_REFRESHED') return
       setSession(s)
     })
     return () => subscription.unsubscribe()
   }, [])
 
   // Cargar perfil y casetas cuando hay sesión
+  // Solo recargamos si no tenemos perfil todavía o si cambió el usuario
   useEffect(() => {
     if (!session) { setPerfil(null); setLoading(false); return }
+    // Si ya tenemos el perfil del mismo usuario, no recargar
+    if (perfil && perfil.id === session.user.id) { setLoading(false); return }
     setLoading(true)
     Promise.all([
       getPerfil(session.user.id),

@@ -1154,17 +1154,21 @@ function ModalInventario({ caseta, perfil, productos, stockActual, onClose, show
 // ─── BADGE KILOS PÓLVORA ──────────────────────────────────────
 function BadgeKgPolvora({ kgActual, kgLimite }) {
   const pct = kgLimite > 0 ? (kgActual / kgLimite) * 100 : 0
-  const color = pct >= 90 ? 'var(--red)' : pct >= 75 ? 'var(--gold)' : 'var(--green)'
+  const color = pct >= 100 ? 'var(--red)' : pct >= 90 ? 'var(--red)' : pct >= 75 ? 'var(--gold)' : 'var(--green)'
   const alerta = pct >= 80
+  const icono = pct >= 100 ? '🚨' : pct >= 90 ? '⚠️' : '⚠️'
   return (
-    <div title={`${kgActual.toFixed(2)} kg / ${kgLimite} kg permitidos`} style={{
+    <div title={`${kgActual.toFixed(2)} kg / ${kgLimite} kg permitidos (${pct.toFixed(0)}%)`} style={{
       display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px',
       background: alerta ? `rgba(${pct >= 90 ? '239,68,68' : '245,200,66'},.15)` : 'var(--s2)',
       border: `1px solid ${color}`, borderRadius: 20, fontSize: '.72rem', cursor: 'default',
     }}>
       <span style={{ color, fontWeight: 700 }}>💥 {kgActual.toFixed(2)}kg</span>
       <span style={{ color: 'var(--tx2)' }}>/ {kgLimite}kg</span>
-      {alerta && <span style={{ color, fontWeight: 800 }}>⚠️</span>}
+      {pct >= 100
+        ? <span style={{ color: 'var(--red)', fontWeight: 800 }}>🚨 SUPERADO</span>
+        : alerta && <span style={{ color, fontWeight: 800 }}>{icono}</span>
+      }
     </div>
   )
 }
@@ -1312,10 +1316,21 @@ function ModalFichajes({ perfil, caseta, ultimoFichaje, onFichar, onClose, showT
 
         {/* ── Navegación semana ── */}
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
-          <button onClick={()=>setSemana(s=>s-1)} style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'6px 12px',color:'var(--tx2)',cursor:'pointer',fontFamily:"'DM Sans',sans-serif"}}>‹</button>
-          <span style={{flex:1,textAlign:'center',fontSize:'.83rem',fontWeight:600}}>{labelSemana}</span>
-          <button onClick={()=>setSemana(s=>Math.min(0,s+1))} disabled={semana>=0}
-            style={{background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',padding:'6px 12px',color:semana>=0?'var(--s3)':'var(--tx2)',cursor:semana>=0?'default':'pointer',fontFamily:"'DM Sans',sans-serif"}}>›</button>
+          <button onClick={()=>setSemana(s=>s-1)} style={{
+            background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',
+            padding:'6px 14px',color:'var(--tx2)',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",
+            fontSize:'1.1rem',lineHeight:1,
+          }}>‹</button>
+          <span style={{flex:1,textAlign:'center',fontSize:'.85rem',fontWeight:700}}>{labelSemana}</span>
+          {/* Solo se renderiza si hay semana siguiente — evita el cuadrado vacío */}
+          {semana < 0
+            ? <button onClick={()=>setSemana(s=>s+1)} style={{
+                background:'var(--s2)',border:'1px solid var(--bd)',borderRadius:'var(--rs)',
+                padding:'6px 14px',color:'var(--tx2)',cursor:'pointer',fontFamily:"'DM Sans',sans-serif",
+                fontSize:'1.1rem',lineHeight:1,
+              }}>›</button>
+            : <div style={{width:38}} /> /* espaciador para mantener centrado el texto */
+          }
           {!loading&&<span style={{fontSize:'.78rem',color:'var(--ac)',fontWeight:700,whiteSpace:'nowrap'}}>{fmtDuracion(totalTrabajado)} trabajado</span>}
         </div>
 
@@ -1623,13 +1638,17 @@ export default function EmpleadoPanel({ perfil, casetas }) {
       {/* Alerta pólvora prominente */}
       {pctPolvora >= 80 && (
         <div style={{
-          background: pctPolvora >= 90 ? 'rgba(239,68,68,.15)' : 'rgba(245,200,66,.12)',
+          background: pctPolvora >= 100 ? 'rgba(239,68,68,.2)' : pctPolvora >= 90 ? 'rgba(239,68,68,.15)' : 'rgba(245,200,66,.12)',
           borderBottom: `2px solid ${pctPolvora >= 90 ? 'var(--red)' : 'var(--gold)'}`,
           padding: '7px 20px', fontSize: '.8rem', fontWeight: 700,
           color: pctPolvora >= 90 ? 'var(--red)' : 'var(--gold)',
         }}>
-          ⚠️ {pctPolvora >= 90 ? '🚨 ALERTA: ' : ''}Límite de pólvora al {pctPolvora.toFixed(0)}% ({kgPolvora.toFixed(2)} kg de {kgLimite} kg permitidos)
-          {pctPolvora >= 90 && ' — NO recibir más stock hasta reducir'}
+          {pctPolvora >= 100
+            ? `🚨 LÍMITE SUPERADO: ${kgPolvora.toFixed(2)} kg de ${kgLimite} kg permitidos (${pctPolvora.toFixed(0)}%) — Obligatorio reducir stock`
+            : pctPolvora >= 90
+            ? `⚠️ ALERTA: Pólvora al ${pctPolvora.toFixed(0)}% (${kgPolvora.toFixed(2)} kg de ${kgLimite} kg) — NO recibir más stock`
+            : `⚠️ Pólvora al ${pctPolvora.toFixed(0)}% — Cerca del límite (${kgPolvora.toFixed(2)} kg de ${kgLimite} kg)`
+          }
         </div>
       )}
 
