@@ -1565,7 +1565,7 @@ export default function EmpleadoPanel({ perfil, casetas }) {
   if (!caja) return (
     <div className="app">
       <div className="topbar">
-        <div className="tl">💥 Caballer</div>
+        <div className="tl">CABALLER</div>
         <div className="ti">
           <span style={{ fontSize: '.8rem', color: 'var(--tx2)' }}>{caseta?.nombre}</span>
           <button className="btn-o" onClick={() => supabase.auth.signOut()}>Salir</button>
@@ -1605,33 +1605,29 @@ export default function EmpleadoPanel({ perfil, casetas }) {
   return (
     <div className="app">
       <div className="topbar">
-        <div className="tl">💥 Caballer</div>
+        <div className="tl">CABALLER</div>
         <div className="ti">
           <BadgeKgPolvora kgActual={kgPolvora} kgLimite={kgLimite} />
-          {/* Botón de fichaje — color según estado */}
+          {/* Botón fichaje compacto */}
           {(() => {
             const est = calcularEstado(ultimoFichaje)
-            const cfgBtn = {
-              libre:      { border:'var(--bd)',               bg:'var(--s2)',                dot:'var(--s3)',    label:'Fichar',          anim:false },
-              trabajando: { border:'rgba(34,197,94,.4)',      bg:'rgba(34,197,94,.12)',      dot:'var(--green)', label:'Trabajando',      anim:true  },
-              descanso:   { border:'rgba(245,200,66,.4)',     bg:'rgba(245,200,66,.12)',     dot:'var(--gold)',  label:'Descansando',     anim:true  },
-            }[est] || {}
+            const dot = { libre:'var(--s3)', trabajando:'var(--green)', descanso:'var(--gold)' }[est]
+            const col = { libre:'var(--tx2)', trabajando:'var(--green)', descanso:'var(--gold)' }[est]
+            const anim = est !== 'libre'
             return (
-              <button onClick={() => setShowFichajes(true)} style={{
-                display:'flex',alignItems:'center',gap:5,padding:'5px 12px',
-                borderRadius:20,border:'1px solid',borderColor:cfgBtn.border,
-                background:cfgBtn.bg,color:est==='descanso'?'var(--gold)':est==='trabajando'?'var(--green)':'var(--tx2)',
-                cursor:'pointer',fontSize:'.75rem',fontWeight:700,fontFamily:"'DM Sans',sans-serif",
+              <button onClick={() => setShowFichajes(true)} title={caseta?.nombre} style={{
+                display:'flex',alignItems:'center',gap:5,padding:'5px 10px',
+                borderRadius:20,border:`1px solid ${anim?(est==='descanso'?'rgba(245,200,66,.4)':'rgba(34,197,94,.4)'):'var(--bd)'}`,
+                background:anim?(est==='descanso'?'rgba(245,200,66,.12)':'rgba(34,197,94,.12)'):'var(--s2)',
+                color:col,cursor:'pointer',fontSize:'.73rem',fontWeight:700,fontFamily:"'DM Sans',sans-serif",
               }}>
-                <span style={{width:7,height:7,borderRadius:'50%',background:cfgBtn.dot,display:'inline-block',
-                  animation:cfgBtn.anim?'pulse 1.5s ease-in-out infinite':'none'}}/>
-                {cfgBtn.label}
+                <span style={{width:7,height:7,borderRadius:'50%',background:dot,display:'inline-block',flexShrink:0,
+                  animation:anim?'pulse 1.5s ease-in-out infinite':'none'}}/>
+                {caseta?.nombre?.replace('Caballer ','').replace('La Petardería ','') || 'Fichar'}
               </button>
             )
           })()}
-          <span style={{ fontSize: '.79rem', color: 'var(--tx2)' }}>{caseta?.nombre}</span>
-          <span className="badge be">Empleado</span>
-          <button className="btn-o" onClick={() => supabase.auth.signOut()}>Salir</button>
+          <button className="btn-o" style={{padding:'5px 10px',fontSize:'.75rem'}} onClick={() => supabase.auth.signOut()}>Salir</button>
         </div>
       </div>
 

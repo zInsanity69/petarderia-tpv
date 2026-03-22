@@ -1334,7 +1334,7 @@ export default function AdminPanel({ perfil, casetas: casetasInit }) {
   return(
     <div className="app">
       <div className="topbar">
-        <div className="tl">💥 Caballer TPV</div>
+        <div className="tl">CABALLER</div>
         <div className="ti">
           <span style={{fontSize:'.8rem',color:'var(--tx2)'}}>{perfil.nombre}</span>
           <span className="badge ba">Admin</span>
