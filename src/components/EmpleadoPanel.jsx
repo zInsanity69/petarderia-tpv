@@ -692,53 +692,53 @@ function ModalPedido({ caseta, perfil, productos, stock, onClose, onCreado, show
                 const enPedido  = cantidadPedida(p.id)
                 return (
                   <div key={p.id} style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0',
-                    borderBottom: '1px solid var(--bd)',
+                    padding: '9px 0', borderBottom: '1px solid var(--bd)',
                     opacity: stockDisp === 0 ? .6 : 1,
                   }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</div>
-                      <div style={{ fontSize: '.72rem', display: 'flex', gap: 8, marginTop: 3, alignItems: 'center' }}>
-                        {stockDisp === 0 ? (
-                          <span style={{ background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.4)', color: 'var(--red)', fontWeight: 800, padding: '1px 7px', borderRadius: 10, fontSize: '.7rem' }}>
-                            ❌ AGOTADO
-                          </span>
-                        ) : stockDisp < 10 ? (
-                          <span style={{ background: 'rgba(245,200,66,.15)', border: '1px solid rgba(245,200,66,.4)', color: 'var(--gold)', fontWeight: 700, padding: '1px 7px', borderRadius: 10, fontSize: '.7rem' }}>
-                            ⚠️ Stock: {stockDisp}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--green)', fontWeight: 600 }}>Stock: {stockDisp}</span>
-                        )}
-                        <span style={{ color: 'var(--tx2)' }}>{p.categoria}</span>
-                        <span style={{ color: 'var(--tx2)', opacity: .7 }}>{fmt(p.precio)}</span>
+                    {/* Fila 1: nombre + botón/controles */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '.85rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</div>
                       </div>
+                      {/* Controles — siempre a la derecha */}
+                      {enPedido > 0 ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                          <button className="qb" style={{ width: 30, height: 30 }} onClick={() => addItem(p, -1)}>−</button>
+                          <input
+                            type="number" min="1" defaultValue={enPedido} key={enPedido}
+                            onBlur={e => {
+                              const q = parseInt(e.target.value) || 0
+                              if (q <= 0) { addItem(p, -enPedido) }
+                              else setItems(prev => prev.map(i => i.producto_id === p.id ? { ...i, cantidad: q } : i))
+                            }}
+                            onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
+                            style={{ width: 46, textAlign: 'center', background: 'var(--s2)', border: '1px solid var(--ac)', borderRadius: 'var(--rs)', color: 'var(--ac)', fontWeight: 800, fontFamily: "'DM Sans',sans-serif", padding: '4px 2px', fontSize: '.9rem' }}
+                            inputMode="numeric"
+                          />
+                          <button className="qb" style={{ width: 30, height: 30 }} onClick={() => addItem(p, +1)}>+</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => addItem(p, 1)} style={{
+                          flexShrink: 0, padding: '5px 12px', borderRadius: 'var(--rs)',
+                          background: 'rgba(255,77,28,.12)', border: '1px solid var(--ac)',
+                          color: 'var(--ac)', fontWeight: 700, cursor: 'pointer',
+                          fontSize: '.75rem', fontFamily: "'DM Sans',sans-serif",
+                        }}>+ Pedir</button>
+                      )}
                     </div>
-                    {/* Controles cantidad a pedir */}
-                    {enPedido > 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <button className="qb" onClick={() => addItem(p, -1)}>−</button>
-                        <input
-                          type="number" min="1" value={enPedido}
-                          onChange={e => {
-                            const q = Math.max(0, parseInt(e.target.value) || 0)
-                            if (q === 0) addItem(p, -enPedido)
-                            else setItems(prev => prev.map(i => i.producto_id === p.id ? { ...i, cantidad: q } : i))
-                          }}
-                          style={{ width: 48, textAlign: 'center', background: 'var(--s2)', border: '1px solid var(--ac)', borderRadius: 'var(--rs)', color: 'var(--ac)', fontWeight: 800, fontFamily: "'DM Sans',sans-serif", padding: '4px 2px', fontSize: '.9rem' }}
-                          inputMode="numeric"
-                        />
-                        <button className="qb" onClick={() => addItem(p, +1)}>+</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => addItem(p, 1)} style={{
-                        padding: '6px 14px', borderRadius: 'var(--rs)',
-                        background: 'rgba(255,77,28,.12)', border: '1px solid var(--ac)',
-                        color: 'var(--ac)', fontWeight: 700, cursor: 'pointer',
-                        fontSize: '.78rem', fontFamily: "'DM Sans',sans-serif",
-                        whiteSpace: 'nowrap',
-                      }}>+ Pedir</button>
-                    )}
+                    {/* Fila 2: stock + info */}
+                    <div style={{ fontSize: '.7rem', display: 'flex', gap: 6, marginTop: 3, alignItems: 'center' }}>
+                      {stockDisp === 0 ? (
+                        <span style={{ background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.4)', color: 'var(--red)', fontWeight: 800, padding: '1px 6px', borderRadius: 8 }}>❌ Agotado</span>
+                      ) : stockDisp < 10 ? (
+                        <span style={{ background: 'rgba(245,200,66,.15)', border: '1px solid rgba(245,200,66,.4)', color: 'var(--gold)', fontWeight: 700, padding: '1px 6px', borderRadius: 8 }}>⚠️ {stockDisp} uds</span>
+                      ) : (
+                        <span style={{ color: 'var(--green)', fontWeight: 600 }}>Stock: {stockDisp}</span>
+                      )}
+                      <span style={{ color: 'var(--tx2)', opacity: .7 }}>{p.categoria}</span>
+                      <span style={{ color: 'var(--tx2)', opacity: .6 }}>{fmt(p.precio)}</span>
+                      {enPedido > 0 && <span style={{ color: 'var(--ac)', fontWeight: 700, marginLeft: 'auto' }}>En pedido: {enPedido}</span>}
+                    </div>
                   </div>
                 )
               })}
@@ -1652,28 +1652,33 @@ export default function EmpleadoPanel({ perfil, casetas }) {
         </div>
       )}
 
-      {/* Subbar caja */}
-      <div style={{ padding: '7px 20px', background: 'var(--s1)', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: '.78rem' }}>
-        <span style={{ color: 'var(--tx2)' }}>
-          Turno: <strong style={{ color: 'var(--tx)' }}>{caja.perfiles?.nombre}</strong>
-        </span>
-        <span style={{ color: 'var(--tx2)' }}>
-          {ventas.length} tickets · <strong style={{ color: 'var(--ac)' }}>{fmt(totalCajaTurno)}</strong>
-        </span>
-        {modoRapido && <span style={{ background: 'rgba(34,197,94,.15)', color: 'var(--green)', padding: '2px 8px', borderRadius: 20, fontSize: '.7rem', fontWeight: 700 }}>⚡ MODO RÁPIDO</span>}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-          <button className="btn-o" onClick={() => setShowHistorial(true)}>Ver tickets</button>
-          <button className="btn-o" style={{ position: 'relative' }} onClick={() => { setShowMisPedidos(true); sessionStorage.setItem('tpv_panel','pedidos') }}>
-            📋 Pedidos
+      {/* Subbar caja — diseño compacto para móvil */}
+      <div style={{ padding: '6px 12px', background: 'var(--s1)', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '.78rem', overflowX: 'auto' }}>
+        {/* Info turno */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ color: 'var(--tx2)', whiteSpace: 'nowrap', fontSize: '.75rem' }}>
+            <strong style={{ color: 'var(--tx)' }}>{caja.perfiles?.nombre}</strong>
+            {' · '}<strong style={{ color: 'var(--ac)' }}>{fmt(totalCajaTurno)}</strong>
+          </span>
+          {modoRapido && <span style={{ background: 'rgba(34,197,94,.15)', color: 'var(--green)', padding: '2px 6px', borderRadius: 20, fontSize: '.65rem', fontWeight: 700, flexShrink: 0 }}>⚡</span>}
+        </div>
+        {/* Separador */}
+        <div style={{ flex: 1 }} />
+        {/* Botones compactos */}
+        <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem' }} onClick={() => setShowHistorial(true)}>🧾</button>
+          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem', position: 'relative' }}
+            onClick={() => { setShowMisPedidos(true); sessionStorage.setItem('tpv_panel','pedidos') }}>
+            📋
             {pedidosPend > 0 && (
-              <span style={{ position: 'absolute', top: -5, right: -5, background: 'var(--ac)', color: 'white', borderRadius: '50%', width: 16, height: 16, fontSize: '.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+              <span style={{ position: 'absolute', top: -4, right: -4, background: 'var(--ac)', color: 'white', borderRadius: '50%', width: 14, height: 14, fontSize: '.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
                 {pedidosPend}
               </span>
             )}
           </button>
-          <button className="btn-o" onClick={() => setShowPedido(true)}>📤 Pedir</button>
-          <button className="btn-o" onClick={() => { setShowInventario(true); sessionStorage.setItem('tpv_panel','inventario') }}>📋 Inventario</button>
-          <button className="btn-o" onClick={() => setShowCierre(true)}>Cerrar Caja</button>
+          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem' }} onClick={() => setShowPedido(true)}>📤</button>
+          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem' }} onClick={() => { setShowInventario(true); sessionStorage.setItem('tpv_panel','inventario') }}>📊</button>
+          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem', borderColor: 'rgba(239,68,68,.4)', color: 'var(--red)' }} onClick={() => setShowCierre(true)}>✕ Caja</button>
         </div>
       </div>
 

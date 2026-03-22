@@ -178,7 +178,6 @@ function PanelVentas({ casetas, onVerDia }) {
         <div className="sc"><div className="sv">{diasConVenta}</div><div className="sl2">Días con venta</div></div>
         <div className="sc"><div className="sv">{diasConVenta?fmt(totalMes/diasConVenta):'—'}</div><div className="sl2">Media/día</div></div>
       </div>
-      {errorBusq&&<div style={{background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.3)',borderRadius:'var(--rs)',padding:'10px 14px',marginBottom:12,color:'var(--red)',fontSize:'.82rem'}}>⚠️ Error al cargar fichajes: {errorBusq}</div>}
       {loading?<div className="loading-row"><div className="spin-sm"/>Cargando...</div>:(
         <div style={{background:'var(--s1)',border:'1px solid var(--bd)',borderRadius:'var(--r)',padding:16,marginBottom:20}}>
           <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4,marginBottom:6}}>
