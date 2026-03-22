@@ -178,6 +178,7 @@ function PanelVentas({ casetas, onVerDia }) {
         <div className="sc"><div className="sv">{diasConVenta}</div><div className="sl2">Días con venta</div></div>
         <div className="sc"><div className="sv">{diasConVenta?fmt(totalMes/diasConVenta):'—'}</div><div className="sl2">Media/día</div></div>
       </div>
+      {errorBusq&&<div style={{background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.3)',borderRadius:'var(--rs)',padding:'10px 14px',marginBottom:12,color:'var(--red)',fontSize:'.82rem'}}>⚠️ Error al cargar fichajes: {errorBusq}</div>}
       {loading?<div className="loading-row"><div className="spin-sm"/>Cargando...</div>:(
         <div style={{background:'var(--s1)',border:'1px solid var(--bd)',borderRadius:'var(--r)',padding:16,marginBottom:20}}>
           <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4,marginBottom:6}}>
@@ -1098,9 +1099,12 @@ function PanelFichajes({ casetas, adminId }) {
     getPerfiles().then(setPerfiles).catch(()=>{})
   }, [])
 
+  const [errorBusq, setErrorBusq] = useState(null)
+
   // buscar acepta parámetros explícitos para evitar problemas de closure
   const buscar = (d=desde, h=hasta, cas=casetaSel, emp=empleadoSel) => {
     setLoading(true)
+    setErrorBusq(null)
     // La api ya compensa timezone (+/-3h). Aquí pasamos el día en formato local.
     getFichajesAdmin(d+'T00:00:00', h+'T23:59:59', cas||null, emp||null)
       .then(data => {
@@ -1112,6 +1116,7 @@ function PanelFichajes({ casetas, adminId }) {
           return ts >= desdeLocal && ts <= hastaLocal
         }))
       })
+      .catch(e => { setErrorBusq(e.message); setFichajes([]) })
       .finally(()=>setLoading(false))
   }
   // Cargar al montar pasando los valores iniciales directamente (evita problema de closure)

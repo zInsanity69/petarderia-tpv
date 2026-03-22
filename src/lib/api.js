@@ -505,13 +505,13 @@ export async function getFichajesEmpleado(empleadoId, desde, hasta) {
 }
 
 export async function getFichajesAdmin(desde, hasta, casetaId, empleadoId) {
+  // Select simple sin JOIN para evitar problemas de RLS en tablas relacionadas
   let q = supabase
     .from('fichajes')
-    .select('*, perfiles(nombre, caseta_id), casetas(nombre)')
+    .select('id, empleado_id, caseta_id, tipo, timestamp, notas, editado, editado_por')
     .order('timestamp', { ascending: false })
-  // Compensar timezone: España puede ser UTC+1 o UTC+2 (verano).
-  // Restamos 3h al inicio y sumamos 3h al final para cubrir cualquier zona.
-  // El filtro final en cliente eliminará los que queden fuera del rango real.
+
+  // Compensar timezone España (UTC+1/+2): ampliar ±3h y filtrar en cliente
   if (desde) {
     const d = new Date(desde); d.setHours(d.getHours() - 3)
     q = q.gte('timestamp', d.toISOString())
@@ -522,9 +522,31 @@ export async function getFichajesAdmin(desde, hasta, casetaId, empleadoId) {
   }
   if (casetaId)   q = q.eq('caseta_id', casetaId)
   if (empleadoId) q = q.eq('empleado_id', empleadoId)
+
   const { data, error } = await q
   if (error) throw error
-  return data || []
+
+  // Enriquecer con perfiles y casetas por separado para evitar RLS en JOIN
+  const fichajes = data || []
+  if (fichajes.length === 0) return []
+
+  // Obtener perfiles y casetas únicos
+  const empIds = [...new Set(fichajes.map(f => f.empleado_id))]
+  const casIds = [...new Set(fichajes.map(f => f.caseta_id))]
+
+  const [{ data: perfs }, { data: cases }] = await Promise.all([
+    supabase.from('perfiles').select('id, nombre').in('id', empIds),
+    supabase.from('casetas').select('id, nombre').in('id', casIds),
+  ])
+
+  const perfilMap  = Object.fromEntries((perfs||[]).map(p => [p.id, p]))
+  const casetaMap  = Object.fromEntries((cases||[]).map(c => [c.id, c]))
+
+  return fichajes.map(f => ({
+    ...f,
+    perfiles: perfilMap[f.empleado_id] || { nombre: '?' },
+    casetas:  casetaMap[f.caseta_id]   || { nombre: '?' },
+  }))
 }
 
 export async function editarFichaje(fichajeId, adminId, nuevoTimestamp, notas) {
