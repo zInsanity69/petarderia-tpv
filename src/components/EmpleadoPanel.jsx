@@ -2012,16 +2012,24 @@ export default function EmpleadoPanel({ perfil, casetas }) {
 
       {/* Subbar caja — diseño compacto para móvil */}
       <div style={{ padding: '6px 12px', background: 'var(--s1)', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '.78rem', overflowX: 'auto' }}>
-        {/* Info turno / estado caja */}
+        {/* Info empleado + caja */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {caja ? (
-            <span style={{ color: 'var(--tx2)', whiteSpace: 'nowrap', fontSize: '.75rem' }}>
-              <strong style={{ color: 'var(--tx)' }}>{caja.perfiles?.nombre}</strong>
-              {' · '}<strong style={{ color: 'var(--ac)' }}>{fmt(totalCajaTurno)}</strong>
+          <span style={{ color: 'var(--tx)', fontWeight: 700, whiteSpace: 'nowrap', fontSize: '.8rem' }}>
+            {perfil.nombre}
+          </span>
+          {caja ? (<>
+            {/* Si la caja la abrió otro empleado, mostrarlo — solo en escritorio */}
+            {caja.perfiles?.nombre && caja.perfiles.nombre !== perfil.nombre && (
+              <span className="hide-mobile" style={{ color: 'var(--tx2)', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
+                · abierta por <strong>{caja.perfiles.nombre}</strong>
+              </span>
+            )}
+            <span style={{ color: 'var(--tx2)', fontSize: '.75rem', whiteSpace: 'nowrap' }}>
+              · <strong style={{ color: 'var(--ac)' }}>{fmt(totalCajaTurno)}</strong>
             </span>
-          ) : (
-            <span style={{ color: 'var(--gold)', fontSize: '.75rem', fontWeight: 700 }}>
-              🟡 Caja no abierta
+          </>) : (
+            <span style={{ color: 'var(--gold)', fontSize: '.72rem', fontWeight: 600, background: 'rgba(245,200,66,.1)', padding: '2px 7px', borderRadius: 10 }}>
+              sin caja
             </span>
           )}
           {modoRapido && <span style={{ background: 'rgba(34,197,94,.15)', color: 'var(--green)', padding: '2px 6px', borderRadius: 20, fontSize: '.65rem', fontWeight: 700, flexShrink: 0 }}>⚡</span>}
