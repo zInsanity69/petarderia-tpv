@@ -364,7 +364,7 @@ function ModalCierreCaja({ caja, caseta, ventas, onClose, onCerrar }) {
 }
 
 // ─── MODAL HISTORIAL + EDICIÓN TICKETS ───────────────────────
-function ModalHistorial({ cajaId, perfil, productos, ofertas, onStockChange, onClose }) {
+function ModalHistorial({ cajaId, perfil, caseta, productos, ofertas, onStockChange, onClose }) {
   const [tickets, setTickets]       = useState([])
   const [loading, setLoading]       = useState(true)
   const [expanded, setExpanded]     = useState(null)
@@ -2023,21 +2023,29 @@ export default function EmpleadoPanel({ perfil, casetas }) {
         </div>
         {/* Separador */}
         <div style={{ flex: 1 }} />
-        {/* Botones compactos */}
+        {/* Botones — con texto en escritorio, solo icono en móvil */}
         <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem' }} onClick={() => setShowHistorial(true)}>🧾</button>
-          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem', position: 'relative' }}
+          <button className="btn-o subbar-btn" onClick={() => setShowHistorial(true)}>
+            <span className="btn-icon">🧾</span><span className="btn-label"> Tickets</span>
+          </button>
+          <button className="btn-o subbar-btn" style={{ position: 'relative' }}
             onClick={() => { setShowMisPedidos(true); sessionStorage.setItem('tpv_panel','pedidos') }}>
-            📋
+            <span className="btn-icon">📋</span><span className="btn-label"> Pedidos</span>
             {pedidosPend > 0 && (
               <span style={{ position: 'absolute', top: -4, right: -4, background: 'var(--ac)', color: 'white', borderRadius: '50%', width: 14, height: 14, fontSize: '.55rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
                 {pedidosPend}
               </span>
             )}
           </button>
-          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem' }} onClick={() => setShowPedido(true)}>📤</button>
-          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem' }} onClick={() => { setShowInventario(true); sessionStorage.setItem('tpv_panel','inventario') }}>📊</button>
-          <button className="btn-o" style={{ padding: '5px 10px', fontSize: '.72rem', borderColor: 'rgba(239,68,68,.4)', color: 'var(--red)' }} onClick={() => setShowCierre(true)}>✕ Caja</button>
+          <button className="btn-o subbar-btn" onClick={() => setShowPedido(true)}>
+            <span className="btn-icon">📤</span><span className="btn-label"> Pedir</span>
+          </button>
+          <button className="btn-o subbar-btn" onClick={() => { setShowInventario(true); sessionStorage.setItem('tpv_panel','inventario') }}>
+            <span className="btn-icon">📊</span><span className="btn-label"> Inventario</span>
+          </button>
+          <button className="btn-o subbar-btn" style={{ borderColor: 'rgba(239,68,68,.4)', color: 'var(--red)' }} onClick={() => setShowCierre(true)}>
+            <span className="btn-icon">✕</span><span className="btn-label"> Caja</span>
+          </button>
         </div>
       </div>
 
@@ -2262,7 +2270,7 @@ export default function EmpleadoPanel({ perfil, casetas }) {
           onClose={() => setShowCierre(false)} onCerrar={confirmarCierre} />
       )}
       {showHistorial && (
-        <ModalHistorial cajaId={caja.id} perfil={perfil} productos={productos} ofertas={ofertas}
+        <ModalHistorial cajaId={caja.id} perfil={perfil} caseta={caseta} productos={productos} ofertas={ofertas}
           onStockChange={(delta) => setStock(prev => {
             const next = { ...prev }
             Object.entries(delta).forEach(([id, diff]) => {

@@ -550,7 +550,16 @@ function PanelPedidos({ casetas, onPedidoAceptado }) {
     return true
   })
 
-  const abrirEdicion=p=>{ setEditando(p); setEditItems(p.pedido_items.map(i=>({producto_id:i.producto_id,nombre:i.productos?.nombre||'?',cantidad:i.cantidad}))); setNotasAdmin(p.notas_admin||'') }
+  const abrirEdicion=p=>{ 
+    setEditando(p)
+    setEditItems(p.pedido_items.map(i=>({
+      // producto_id puede venir directo o dentro del objeto productos (fallback)
+      producto_id: i.producto_id || i.productos?.id,
+      nombre: i.productos?.nombre || '?',
+      cantidad: i.cantidad
+    })))
+    setNotasAdmin(p.notas_admin||'')
+  }
 
   const guardarEdicion=async()=>{
     setSaving(true)

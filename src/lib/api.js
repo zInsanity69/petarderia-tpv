@@ -308,7 +308,7 @@ export function toggleFavorito(productoId) {
 // ─── PEDIDOS ─────────────────────────────────────────────────
 export async function getPedidos(filtros = {}) {
   let q = supabase.from('pedidos')
-    .select('*, casetas(nombre), perfiles(nombre), pedido_items(id, cantidad, cantidad_recibida, notas_item, productos(id, nombre, categoria))')
+    .select('*, casetas(nombre), perfiles(nombre), pedido_items(id, producto_id, cantidad, cantidad_recibida, notas_item, productos(id, nombre, categoria))')
     .order('creado_en', { ascending: false })
   if (filtros.casetaId) q = q.eq('caseta_id', filtros.casetaId)
   if (filtros.estado)   q = q.eq('estado', filtros.estado)
