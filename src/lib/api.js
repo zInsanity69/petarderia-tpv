@@ -207,7 +207,9 @@ export async function abrirCaja(casetaId, empleadoId, aperturaDinero) {
     .from('cajas').insert({ caseta_id: casetaId, abierta_por: empleadoId, apertura_dinero: aperturaDinero })
     .select().single()
   if (error) throw error
-  return data
+  // Recargar con join de perfiles para tener el nombre de quien abrió
+  const cajaCon = await getCajaAbierta(casetaId)
+  return cajaCon || data
 }
 
 export async function cerrarCaja(cajaId, empleadoId, dineroContado) {

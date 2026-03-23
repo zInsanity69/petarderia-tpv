@@ -2018,10 +2018,10 @@ export default function EmpleadoPanel({ perfil, casetas }) {
             {perfil.nombre}
           </span>
           {caja ? (<>
-            {/* Si la caja la abrió otro empleado, mostrarlo — solo en escritorio */}
+            {/* Si la caja la abrió otro empleado, mostrarlo siempre */}
             {caja.perfiles?.nombre && caja.perfiles.nombre !== perfil.nombre && (
-              <span className="hide-mobile" style={{ color: 'var(--tx2)', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
-                · abierta por <strong>{caja.perfiles.nombre}</strong>
+              <span style={{ color: 'var(--tx2)', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
+                · <strong style={{ color: 'var(--tx)' }}>{caja.perfiles.nombre}</strong>
               </span>
             )}
             <span style={{ color: 'var(--tx2)', fontSize: '.75rem', whiteSpace: 'nowrap' }}>
