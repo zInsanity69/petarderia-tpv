@@ -1732,7 +1732,8 @@ export default function EmpleadoPanel({ perfil, casetas }) {
   const [cat,            setCat]            = useState('Todos')
   const [showScan,       setShowScan]       = useState(false)
   const [showPago,       setShowPago]       = useState(false)
-  const [showCierre,     setShowCierre]     = useState(false)
+  const [showCierre,       setShowCierre]       = useState(false)
+  const [showAperturaCaja, setShowAperturaCaja] = useState(false)
   const [showHistorial,  setShowHistorial]  = useState(false)
   const [showOk,         setShowOk]         = useState(null)
   const [toast,          setToast]          = useState(null)
@@ -1812,6 +1813,11 @@ export default function EmpleadoPanel({ perfil, casetas }) {
       setShowFichajes(true)
       return
     }
+    if (!caja) {
+      showToast('Abre la caja antes de vender', 'error')
+      setShowAperturaCaja(true)
+      return
+    }
     const stockDisp = stock[prod.id] ?? 0
     if (stockDisp <= 0) { showToast('Sin stock disponible', 'error'); return }
     setTicket(prev => {
@@ -1882,41 +1888,22 @@ export default function EmpleadoPanel({ perfil, casetas }) {
   const confirmarCierre = async (contado) => {
     try {
       await cerrarCaja(caja.id, perfil.id, contado)
-      setCaja(null); setVentas([]); setTicket([]); setShowCierre(false)
+      // Cerrar todos los modales abiertos antes de resetear la caja
+      setShowCierre(false)
+      setShowFichajes(false)
+      setShowHistorial(false)
+      setShowMisPedidos(false)
+      setShowInventario(false)
+      setShowPedido(false)
+      setShowOk(null)
+      sessionStorage.removeItem('tpv_panel')
+      setTimeout(() => {
+        setCaja(null); setVentas([]); setTicket([])
+      }, 150)
     } catch (e) { showToast('Error cerrando caja: ' + e.message, 'error') }
   }
 
   if (loading) return <div className="splash"><div className="spinner" /></div>
-
-  // ── Pantalla apertura caja ─────────────────────────────────
-  if (!caja) return (
-    <div className="app">
-      <div className="topbar">
-        <div className="tl">CABALLER</div>
-        <div className="ti">
-          <span style={{ fontSize: '.8rem', color: 'var(--tx2)' }}>{caseta?.nombre}</span>
-          <button className="btn-o" onClick={() => supabase.auth.signOut()}>Salir</button>
-        </div>
-      </div>
-      <div className="apw">
-        <div className="apc">
-          <div className="apt">Apertura de Caja</div>
-          <div className="aps">Hola <strong>{perfil.nombre}</strong> · {caseta?.nombre}</div>
-          {!estaFichado && (
-            <div style={{background:'rgba(255,77,28,.1)',border:'1px solid rgba(255,77,28,.3)',borderRadius:'var(--rs)',padding:'9px 12px',marginBottom:12,fontSize:'.8rem',color:'var(--ac)'}}>
-              ⏱ Recuerda fichar tu entrada antes de abrir caja
-              <button onClick={()=>setShowFichajes(true)} style={{display:'block',marginTop:6,background:'var(--ac)',border:'none',borderRadius:'var(--rs)',padding:'5px 14px',color:'white',fontWeight:700,cursor:'pointer',fontFamily:"'DM Sans',sans-serif",fontSize:'.78rem'}}>
-                🟢 Fichar entrada ahora
-              </button>
-            </div>
-          )}
-          <input className="bi" type="number" placeholder="0,00" value={apertura}
-            onChange={e => setApertura(e.target.value)} min="0" step="0.01" inputMode="decimal" />
-          <button className="btn-p" onClick={handleAbrirCaja}>Abrir caja y comenzar</button>
-        </div>
-      </div>
-    </div>
-  )
 
   // ── TPV ────────────────────────────────────────────────────
   const totalCajaTurno = ventas.reduce((s, v) => s + v.total, 0)
@@ -1975,7 +1962,7 @@ export default function EmpleadoPanel({ perfil, casetas }) {
         </div>
       </div>
 
-      {/* Banner de estado de fichaje — solo cuando ya se cargó el estado */}
+      {/* Banner de estado — fichaje o caja */}
       {!fichajeLoading && !puedeOperar && (
         <div onClick={() => setShowFichajes(true)} style={{
           padding: '9px 14px', cursor: 'pointer',
@@ -1986,11 +1973,23 @@ export default function EmpleadoPanel({ perfil, casetas }) {
         }}>
           <span style={{ fontSize: '1.1rem' }}>{enDescanso ? '☕' : '⏱'}</span>
           <span>
-            {enDescanso
-              ? 'Estás en descanso — toca aquí para volver al trabajo'
+            {enDescanso ? 'Estás en descanso — toca aquí para volver al trabajo'
               : 'No has fichado — toca aquí para registrar tu entrada'}
           </span>
           <span style={{ marginLeft: 'auto', opacity: .7, fontSize: '.75rem' }}>→ Fichar</span>
+        </div>
+      )}
+      {!fichajeLoading && puedeOperar && !caja && (
+        <div onClick={() => setShowAperturaCaja(true)} style={{
+          padding: '9px 14px', cursor: 'pointer',
+          background: 'rgba(245,200,66,.12)',
+          borderBottom: '2px solid var(--gold)',
+          display: 'flex', alignItems: 'center', gap: 10, fontSize: '.82rem', fontWeight: 700,
+          color: 'var(--gold)',
+        }}>
+          <span style={{ fontSize: '1.1rem' }}>🟡</span>
+          <span>Caja no abierta — toca aquí para abrir caja y poder vender</span>
+          <span style={{ marginLeft: 'auto', opacity: .7, fontSize: '.75rem' }}>→ Abrir caja</span>
         </div>
       )}
 
@@ -2013,12 +2012,18 @@ export default function EmpleadoPanel({ perfil, casetas }) {
 
       {/* Subbar caja — diseño compacto para móvil */}
       <div style={{ padding: '6px 12px', background: 'var(--s1)', borderBottom: '1px solid var(--bd)', display: 'flex', alignItems: 'center', gap: 8, fontSize: '.78rem', overflowX: 'auto' }}>
-        {/* Info turno */}
+        {/* Info turno / estado caja */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ color: 'var(--tx2)', whiteSpace: 'nowrap', fontSize: '.75rem' }}>
-            <strong style={{ color: 'var(--tx)' }}>{caja.perfiles?.nombre}</strong>
-            {' · '}<strong style={{ color: 'var(--ac)' }}>{fmt(totalCajaTurno)}</strong>
-          </span>
+          {caja ? (
+            <span style={{ color: 'var(--tx2)', whiteSpace: 'nowrap', fontSize: '.75rem' }}>
+              <strong style={{ color: 'var(--tx)' }}>{caja.perfiles?.nombre}</strong>
+              {' · '}<strong style={{ color: 'var(--ac)' }}>{fmt(totalCajaTurno)}</strong>
+            </span>
+          ) : (
+            <span style={{ color: 'var(--gold)', fontSize: '.75rem', fontWeight: 700 }}>
+              🟡 Caja no abierta
+            </span>
+          )}
           {modoRapido && <span style={{ background: 'rgba(34,197,94,.15)', color: 'var(--green)', padding: '2px 6px', borderRadius: 20, fontSize: '.65rem', fontWeight: 700, flexShrink: 0 }}>⚡</span>}
         </div>
         {/* Separador */}
@@ -2043,9 +2048,16 @@ export default function EmpleadoPanel({ perfil, casetas }) {
           <button className="btn-o subbar-btn" onClick={() => { setShowInventario(true); sessionStorage.setItem('tpv_panel','inventario') }}>
             <span className="btn-icon">📊</span><span className="btn-label"> Inventario</span>
           </button>
-          <button className="btn-o subbar-btn" style={{ borderColor: 'rgba(239,68,68,.3)', color: 'var(--red)' }} onClick={() => setShowCierre(true)}>
-            <span className="btn-icon">🔒</span><span className="btn-label"> Cerrar caja</span>
-          </button>
+          {caja ? (
+            <button className="btn-o subbar-btn" style={{ borderColor: 'rgba(239,68,68,.3)', color: 'var(--red)' }} onClick={() => setShowCierre(true)}>
+              <span className="btn-icon">🔒</span><span className="btn-label"> Cerrar caja</span>
+            </button>
+          ) : (
+            <button className="btn-o subbar-btn" style={{ borderColor: 'rgba(34,197,94,.4)', color: 'var(--green)' }}
+              onClick={() => estaFichado ? setShowAperturaCaja(true) : (showToast('Ficha tu entrada primero', 'error'), setShowFichajes(true))}>
+              <span className="btn-icon">🟢</span><span className="btn-label"> Abrir caja</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2222,17 +2234,19 @@ export default function EmpleadoPanel({ perfil, casetas }) {
                 <span className="tta">{fmt(total)}</span>
               </div>
               <button className="bfin"
-                disabled={ticket.length === 0 || !puedeOperar}
+                disabled={ticket.length === 0 || !puedeOperar || !caja}
                 onClick={() => {
                   if (!puedeOperar) {
                     showToast(enDescanso ? '☕ Termina el descanso para cobrar' : '⏱ Ficha tu entrada para cobrar', 'error')
                     setShowFichajes(true)
                     return
                   }
+                  if (!caja) { showToast('Abre la caja antes de cobrar', 'error'); setShowAperturaCaja(true); return }
                   setShowPago(true)
                 }}>
                 {!puedeOperar
                   ? (enDescanso ? '☕ En descanso' : '⏱ Ficha para vender')
+                  : !caja ? '🟡 Abre la caja'
                   : 'Finalizar Venta →'}
               </button>
               {ticket.length > 0 && (
@@ -2269,6 +2283,34 @@ export default function EmpleadoPanel({ perfil, casetas }) {
         <ModalCierreCaja caja={caja} caseta={caseta?.nombre} ventas={ventas}
           onClose={() => setShowCierre(false)} onCerrar={confirmarCierre} />
       )}
+
+      {/* Modal apertura de caja */}
+      {showAperturaCaja && (
+        <div className="mo" onClick={e => e.target === e.currentTarget && setShowAperturaCaja(false)}>
+          <div className="mc">
+            <div className="mt-modal">🟢 Abrir Caja</div>
+            <div style={{ fontSize: '.85rem', color: 'var(--tx2)', marginBottom: 16 }}>
+              Hola <strong style={{ color: 'var(--tx)' }}>{perfil.nombre}</strong> · {caseta?.nombre}
+            </div>
+            <div className="fg">
+              <label>Dinero inicial en caja</label>
+              <input className="bi" type="number" placeholder="0,00" value={apertura}
+                onChange={e => setApertura(e.target.value)} min="0" step="0.01" inputMode="decimal"
+                style={{ fontSize: '1.4rem', marginBottom: 0 }} />
+            </div>
+            <button className="btn-p" style={{ marginTop: 16 }} onClick={async () => {
+              try {
+                const c = await abrirCaja(caseta.id, perfil.id, parseFloat(apertura) || 0)
+                setCaja(c); setVentas([])
+                setShowAperturaCaja(false)
+                showToast('✓ Caja abierta')
+              } catch (e) { showToast('Error: ' + e.message, 'error') }
+            }}>Abrir caja y comenzar</button>
+            <button className="btn-s" onClick={() => setShowAperturaCaja(false)}>Cancelar</button>
+          </div>
+        </div>
+      )}
+
       {showHistorial && (
         <ModalHistorial cajaId={caja.id} perfil={perfil} caseta={caseta} productos={productos} ofertas={ofertas}
           onStockChange={(delta) => setStock(prev => {
@@ -2330,7 +2372,11 @@ export default function EmpleadoPanel({ perfil, casetas }) {
             // Recargar otros activos al fichar (puede haber cambiado)
             getEmpleadosActivosCaseta(caseta.id, perfil.id).then(setOtrosActivos)
           }}
-          onSolicitarCierreCaja={() => { setShowFichajes(false); setShowCierre(true) }}
+          onSolicitarCierreCaja={() => {
+            setShowFichajes(false)
+            // Pequeño delay para que el modal de fichajes se desmonte antes de abrir cierre
+            setTimeout(() => setShowCierre(true), 100)
+          }}
           onClose={() => setShowFichajes(false)}
         />
       )}
