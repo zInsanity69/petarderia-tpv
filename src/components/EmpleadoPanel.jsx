@@ -2018,14 +2018,10 @@ export default function EmpleadoPanel({ perfil, casetas }) {
             {perfil.nombre}
           </span>
           {caja ? (<>
-            {/* Si la caja la abrió otro empleado, mostrarlo siempre */}
-            {caja.perfiles?.nombre && caja.perfiles.nombre !== perfil.nombre && (
-              <span style={{ color: 'var(--tx2)', fontSize: '.72rem', whiteSpace: 'nowrap' }}>
-                · <strong style={{ color: 'var(--tx)' }}>{caja.perfiles.nombre}</strong>
-              </span>
-            )}
+            {/* Turno: nombre de quien abrió la caja + total */}
             <span style={{ color: 'var(--tx2)', fontSize: '.75rem', whiteSpace: 'nowrap' }}>
-              · <strong style={{ color: 'var(--ac)' }}>{fmt(totalCajaTurno)}</strong>
+              · <strong style={{ color: 'var(--tx)' }}>{caja.perfiles?.nombre || perfil.nombre}</strong>
+              {' · '}<strong style={{ color: 'var(--ac)' }}>{fmt(totalCajaTurno)}</strong>
             </span>
           </>) : (
             <span style={{ color: 'var(--gold)', fontSize: '.72rem', fontWeight: 600, background: 'rgba(245,200,66,.1)', padding: '2px 7px', borderRadius: 10 }}>
