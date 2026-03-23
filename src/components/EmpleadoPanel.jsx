@@ -2043,8 +2043,8 @@ export default function EmpleadoPanel({ perfil, casetas }) {
           <button className="btn-o subbar-btn" onClick={() => { setShowInventario(true); sessionStorage.setItem('tpv_panel','inventario') }}>
             <span className="btn-icon">📊</span><span className="btn-label"> Inventario</span>
           </button>
-          <button className="btn-o subbar-btn" style={{ borderColor: 'rgba(239,68,68,.4)', color: 'var(--red)' }} onClick={() => setShowCierre(true)}>
-            <span className="btn-icon">✕</span><span className="btn-label"> Caja</span>
+          <button className="btn-o subbar-btn" style={{ borderColor: 'rgba(239,68,68,.3)', color: 'var(--red)' }} onClick={() => setShowCierre(true)}>
+            <span className="btn-icon">🔒</span><span className="btn-label"> Cerrar caja</span>
           </button>
         </div>
       </div>
