@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase.js'
 import {
   getProductos, upsertProducto, toggleProducto, deleteProducto,
@@ -93,7 +94,10 @@ ${items.map(i=>`<div class="it"><span style="width:20px;text-align:right">${i.ca
 }
 
 function Toast({ msg, type }) {
-  return <div className="twrap"><div className={`toast ${type === 'error' ? 'te2' : 'tok'}`}>{msg}</div></div>
+  return createPortal(
+    <div className="twrap"><div className={`toast ${type === 'error' ? 'te2' : 'tok'}`}>{msg}</div></div>,
+    document.body
+  )
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────
