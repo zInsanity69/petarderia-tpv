@@ -1258,9 +1258,6 @@ function GestionUsuarios({ casetas }) {
         await updatePerfil(editId,cambios)
         // Actualizar email/contraseña si se han rellenado
         if(form.email?.trim()||form.password?.trim()){
-          if(form.password?.trim()&&form.password.trim().length<6){
-            showMsg('La contraseña debe tener al menos 6 caracteres',false); setSaving(false); return
-          }
           await actualizarCredenciales(editId,{email:form.email?.trim()||null,password:form.password?.trim()||null})
         }
         setPerfiles(prev=>prev.map(p=>p.id===editId?{...p,...cambios,casetas:casetas.find(c=>c.id===form.caseta_id)}:p))
