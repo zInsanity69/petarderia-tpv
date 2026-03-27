@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase.js'
 import {
   getProductos, upsertProducto, toggleProducto, deleteProducto,
@@ -94,10 +93,7 @@ ${items.map(i=>`<div class="it"><span style="width:20px;text-align:right">${i.ca
 }
 
 function Toast({ msg, type }) {
-  return createPortal(
-    <div className="twrap"><div className={`toast ${type === 'error' ? 'te2' : 'tok'}`}>{msg}</div></div>,
-    document.body
-  )
+  return <div className="twrap"><div className={`toast ${type === 'error' ? 'te2' : 'tok'}`}>{msg}</div></div>
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────
@@ -1285,7 +1281,7 @@ function GestionUsuarios({ casetas }) {
     <>
       {toast&&<Toast msg={toast.msg} type={toast.type}/>}
       <div className="stit">{editId?'✏️ Editar Usuario':'➕ Nuevo Usuario'}</div>
-      {msg&&<div className={msg.ok?'ok-box':'err-box'}>{msg.txt}</div>}
+      {toast&&<Toast msg={toast.msg} type={toast.type}/>}
       <div className="iform">
         <div className="frow">
           <div className="fg"><label>Nombre completo</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} placeholder="María García"/></div>

@@ -239,8 +239,8 @@ tr:hover td { background: var(--s2); }
 .camt { font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; color: var(--green); }
 
 /* ─── TOAST ──────────────────────────────────────────── */
-.twrap { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; pointer-events: none; }
-.toast { background: var(--s1); border: 1px solid var(--bd); border-radius: var(--rs); padding: 10px 20px; font-size: .83rem; font-weight: 600; white-space: nowrap; animation: tin .3s ease; box-shadow: 0 4px 20px rgba(0,0,0,.4); }
+.twrap { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999; pointer-events: none; }
+.toast { background: var(--s3); border: 1px solid var(--bd); border-radius: var(--rs); padding: 9px 17px; font-size: .83rem; font-weight: 600; white-space: nowrap; animation: tin .3s ease; }
 .te2 { border-color: rgba(239,68,68,.4); color: var(--red); }
 .tok { border-color: rgba(34,197,94,.4); color: var(--green); }
 @keyframes tin { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
