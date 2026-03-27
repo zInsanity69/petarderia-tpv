@@ -1228,7 +1228,7 @@ function GestionUsuarios({ casetas }) {
   const [editId,setEditId]=useState(null)
   const F0={nombre:'',email:'',password:'',rol:'EMPLEADO',caseta_id:''}
   const [showPass, setShowPass] = useState(false)
-  const PASS_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/
+  const PASS_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/
   const passValida = (p) => !p || PASS_REGEX.test(p)
   const passReqs = (p) => {
     if (!p) return null
@@ -1237,6 +1237,7 @@ function GestionUsuarios({ casetas }) {
     if (!/[A-Z]/.test(p)) reqs.push('una mayúscula')
     if (!/[a-z]/.test(p)) reqs.push('una minúscula')
     if (!/\d/.test(p)) reqs.push('un número')
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(p)) reqs.push('un carácter especial (!@#$...)')
     return reqs
   }
   const [form,setForm]=useState(F0)
@@ -1249,7 +1250,7 @@ function GestionUsuarios({ casetas }) {
     if(!form.nombre.trim()){showMsg('Nombre obligatorio',false);return}
     if(!editId&&!form.email.trim()){showMsg('Email obligatorio',false);return}
     if(!editId&&!form.password.trim()){showMsg('Contraseña obligatoria',false);return}
-    if(form.password.trim()&&!passValida(form.password.trim())){showMsg('Contraseña débil: necesita 8+ caracteres, mayúscula, minúscula y número',false);return}
+    if(form.password.trim()&&!passValida(form.password.trim())){showMsg('Contraseña débil: necesita 8+ caracteres, mayúscula, minúscula, número y carácter especial',false);return}
     if(form.rol==='EMPLEADO'&&!form.caseta_id){showMsg('Asigna una caseta al empleado',false);return}
     setSaving(true)
     try{
@@ -1283,7 +1284,7 @@ function GestionUsuarios({ casetas }) {
       <div className="stit">{editId?'✏️ Editar Usuario':'➕ Nuevo Usuario'}</div>
       {msg&&<div className={msg.ok?'ok-box':'err-box'}>{msg.txt}</div>}
       <div className="iform">
-        <div className="frow">
+        <div className="frow" style={{alignItems:"flex-start"}}>
           <div className="fg"><label>Nombre completo</label><input value={form.nombre} onChange={e=>setForm({...form,nombre:e.target.value})} placeholder="María García"/></div>
           {/* Email: obligatorio al crear, opcional al editar */}
           {!editId
