@@ -145,7 +145,7 @@ function Dashboard({ casetas }) {
                 <td style={{color:'var(--tx2)'}}>{new Date(t.creado_en).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</td>
                 <td style={{color:'var(--tx2)'}}>{t.casetas?.nombre}</td>
                 <td>{t.perfiles?.nombre}</td>
-                <td style={{textAlign:'center',whiteSpace:'nowrap'}}>{t.metodo_pago==='efectivo'?'💵 Efectivo':'💳 Tarjeta'}</td>
+                <td style={{whiteSpace:'nowrap'}}>{t.metodo_pago==='efectivo'?'💵 Efectivo':'💳 Tarjeta'}</td>
                 <td style={{fontWeight:700,color:'var(--ac)'}}>{fmt(t.total)}</td>
               </tr>
             ))}
@@ -373,7 +373,7 @@ function PanelTickets({ casetas, filtroInicial }) {
                   <td style={{color:'var(--tx2)',fontSize:'.78rem'}}>{new Date(t.creado_en).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
                   <td style={{color:'var(--tx2)'}}>{t.casetas?.nombre}</td>
                   <td>{t.perfiles?.nombre}</td>
-                  <td style={{textAlign:'center',whiteSpace:'nowrap'}}>{t.metodo_pago==='efectivo'?'💵 Efectivo':'💳 Tarjeta'}</td>
+                  <td style={{whiteSpace:'nowrap'}}>{t.metodo_pago==='efectivo'?'💵 Efectivo':'💳 Tarjeta'}</td>
                   <td style={{fontWeight:700,color:'var(--ac)'}}>{fmt(t.total)}</td>
                   <td><div className="acell">
                     <button className="btn-edit" onClick={()=>setExpanded(expanded===t.id?null:t.id)}>{expanded===t.id?'Ocultar':'Ver líneas'}</button>

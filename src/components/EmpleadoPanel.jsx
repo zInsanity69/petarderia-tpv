@@ -1721,6 +1721,19 @@ function imprimirTicket(datos) {
 export default function EmpleadoPanel({ perfil, casetas }) {
   const caseta = casetas.find(c => c.id === perfil.caseta_id)
 
+  if (!caseta) return (
+    <div className="splash" style={{ flexDirection: 'column', gap: 16, textAlign: 'center', padding: 32 }}>
+      <div style={{ fontSize: '2rem' }}>⚠️</div>
+      <div style={{ fontWeight: 700, color: 'var(--tx)' }}>Sin caseta asignada</div>
+      <div style={{ fontSize: '.85rem', color: 'var(--tx2)', maxWidth: 280 }}>
+        Tu usuario no tiene ninguna caseta asignada. Contacta con el administrador.
+      </div>
+      <button className="btn-s" style={{ marginTop: 8 }} onClick={() => supabase.auth.signOut()}>
+        Cerrar sesión
+      </button>
+    </div>
+  )
+
   const [productos,      setProductos]      = useState([])
   const [stock,          setStock]          = useState({})
   const [ofertas,        setOfertas]        = useState([])
